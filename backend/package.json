@@ -8,12 +8,12 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "tsc && node dist/migrate.js",
+    "backfill:files": "tsc && node dist/backfill-files.js",
     "seed": "tsc && node dist/seed.js",
     "test-email": "tsc && node dist/test-email.js",
     "test": "vitest run"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.2.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -25,7 +25,6 @@
     "multer": "^2.5.0",
     "nodemailer": "^10.2.1",
     "pg": "^8.13.1",
-    "vite": "^7.3.7",
     "zod": "^4.6.7"
   },
   "devDependencies": {

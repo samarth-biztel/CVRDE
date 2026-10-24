@@ -1,42 +1,46 @@
 # CVRDE Work Management Demo
 
-Pilot application for task workflows below the Project Manager level. Uses fictional data only.
-
-## Stack
-
-React, TypeScript, Vite, TanStack Query; Node.js, Express, Zod, Kysely; Neon PostgreSQL; Docker Compose and Caddy. The database is external to Compose. Uploads live on a persistent Docker volume.
+Fictional pilot for project, task, review, pendency, and reporting workflows. The frontend is React/Vite, the API is Node.js/Express, and the database is Neon PostgreSQL.
 
 ## Local start
 
-1. Create a Neon PostgreSQL database, or use a local PostgreSQL database for development.
-2. Copy `backend/.env.example` to `backend/.env`, fill `DATABASE_URL` and a unique `DEMO_PASSWORD` of at least 12 characters. For local HTTP, leave `COOKIE_SECURE=false`.
-3. Run `npm install`, `npm run migrate`, and `npm run seed` from the repository root.
-4. In separate terminals run `npm run dev -w backend` and `npm run dev -w frontend`. Open `http://localhost:5173`.
+1. Copy `.env.example` to `.env` in the repository root. Set `DATABASE_URL` to your Neon connection string and `DEMO_PASSWORD` to a unique value of at least 12 characters. `PUBLIC_DEMO_LOGIN=true` shows the four demo accounts and their shared password on the login screen.
+2. From the repository root, run:
 
-Demo usernames: `pm.demo`, `scientist1.demo`, `scientist2.demo`, `reviewer.demo`. All use `DEMO_PASSWORD` after the reset. The reset deletes and rebuilds the named demo project; it does not delete unrelated projects.
-To verify notifications, set `DEMO_EMAIL_PM`, `DEMO_EMAIL_S1`, `DEMO_EMAIL_S2`, and `DEMO_EMAIL_REVIEWER` to four controlled test inboxes before seeding.
-
-## Cloud deployment
-
-Copy `.env.example` to `.env` in the root and supply `DOMAIN`, `DATABASE_URL`, `DEMO_PASSWORD`, and SMTP settings. Point DNS at the VM and allow inbound 80/443. Run:
-
-```sh
-docker compose --env-file .env -f deploy/docker-compose.yml build
-docker compose --env-file .env -f deploy/docker-compose.yml run --rm api node dist/migrate.js
-docker compose --env-file .env -f deploy/docker-compose.yml run --rm api node dist/seed.js
-docker compose --env-file .env -f deploy/docker-compose.yml up -d
+```powershell
+npm install
+npm run migrate
+npm run seed
 ```
 
-Caddy obtains a public certificate. The API and database have no public inbound port on the VM. The API needs outbound TLS access to Neon. Uploaded files are served only through authorized API endpoints.
+3. Start the frontend and backend together, with live reload. Press Ctrl+C to stop both:
 
-## Operations
+```powershell
+npm run dev
+```
 
-- Restart: `docker compose --env-file .env -f deploy/docker-compose.yml restart`.
-- Reset demo data: `docker compose --env-file .env -f deploy/docker-compose.yml run --rm api node dist/seed.js`.
-- Backup: `sh deploy/backup.sh`; see [restore steps](deploy/restore.md).
-- Email attempts are recorded in `notification_log`. If `SMTP_HOST` is empty, delivery is marked `SKIPPED`; task changes still succeed.
-- A later isolated CVRDE deployment needs local PostgreSQL in place of Neon and a certificate from CVRDE IT.
+Open `http://localhost:5173`. Demo accounts are `pm.demo`, `scientist1.demo`, `scientist2.demo`, and `reviewer.demo`. They share `DEMO_PASSWORD`. Seeding resets only the named fictional demo project and updates the four demo users.
 
-## Current limits
+## One Vercel project
 
-The supplied workspace did not include the existing email implementation or deployment credentials. The app has a configurable SMTP adapter and no live deployment has been made. Do not use the fictional demo accounts or seed data for production.
+Import this repository as **one** Vercel project with the repository root as Root Directory. The root `vercel.json` builds `frontend/dist`, serves it as the site, and routes `/api/v1/*` to one Express function. No separate backend project, frontend project, or public API URL is needed.
+
+Set these environment variables in the Vercel project:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `DEMO_PASSWORD` | Same 12+ character password used when seeding |
+| `PUBLIC_DEMO_LOGIN` | `true` to show the demo accounts and password on the login page |
+
+Before the first deployment, run `npm run migrate` and `npm run seed` locally against that Neon database. After schema changes, run migrations again before deploying the new code. Seeding is a deliberate reset of the demo project, so run it only when you want the sample data refreshed. The API uses secure cookies automatically on Vercel.
+
+For existing installations with files in `backend/uploads`, run `npm run backfill:files` after migration and before deployment. This copies old attachment bytes into PostgreSQL. New uploads are stored in PostgreSQL and work across Vercel function instances. Uploads are limited to 4 MB to fit Vercel's request size limit.
+
+`PUBLIC_DEMO_LOGIN=true` makes the shared demo password public. Use it only for a fictional demo database. The seeded accounts can edit that demo data. Do not reuse the demo password for another service.
+
+## Optional email
+
+Notifications are logged even when email is not configured. To send email, additionally set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. To deliver demo notifications to controlled inboxes, set `DEMO_EMAIL_PM`, `DEMO_EMAIL_S1`, `DEMO_EMAIL_S2`, and `DEMO_EMAIL_REVIEWER` before seeding.
+
+The older Docker/Caddy setup remains under `deploy/` for self hosted use. Vercel deployment does not use Docker or Caddy.

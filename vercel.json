@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build -w frontend",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/api/v1/:path*", "destination": "/api/index?__cvrde_path=/api/v1/:path*" },
+    { "source": "/health", "destination": "/api/index?__cvrde_path=/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -14,6 +14,16 @@ const nonempty = z.string().trim().min(1).max(5000);
 const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
 
 const attempts = new Map<string,{count:number;until:number}>();
+api.get('/auth/demo',(_req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(process.env.PUBLIC_DEMO_LOGIN!=='true' || !process.env.DEMO_PASSWORD)return res.status(404).json({error:'Demo login unavailable'});
+  return res.json({password:process.env.DEMO_PASSWORD,accounts:[
+    {username:'pm.demo',label:'Project Manager'},
+    {username:'scientist1.demo',label:'Scientist One'},
+    {username:'scientist2.demo',label:'Scientist Two'},
+    {username:'reviewer.demo',label:'Reviewer'}
+  ]});
+});
 api.post('/auth/login',handler(async(req,res)=>{
   const {username,password}=parse(z.object({username:z.string().min(1),password:z.string().min(1)}),req.body);
   const key=req.ip || 'unknown', now=Date.now(), entry=attempts.get(key);

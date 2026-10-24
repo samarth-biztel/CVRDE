@@ -23,13 +23,13 @@ describe('fictional demo workflows', () => {
     expect((await s2.get(`/api/v1/tasks/${material.id}/results`)).status).toBe(403);
     expect((await reviewer.get(`/api/v1/tasks/${drawing.id}`)).status).toBe(404);
     const dashboard=await pm.get(`/api/v1/projects/${project.id}/dashboard`);
-    expect(dashboard.body.total).toBe(6);expect(dashboard.body.overdue).toBe(1);
+    expect(dashboard.body.total).toBe(17);expect(dashboard.body.overdue).toBe(2);
 
     const extension=await s1.post(`/api/v1/tasks/${material.id}/extension-requests`).send({new_due_date:'2099-01-01',reason:'Additional samples required'});
     expect(extension.status).toBe(201);
     expect((await s2.post(`/api/v1/extension-requests/${extension.body.id}/decision`).send({approve:true})).status).toBe(404);
     expect((await pm.post(`/api/v1/extension-requests/${extension.body.id}/decision`).send({approve:true})).body.status).toBe('APPROVED');
-    expect((await pm.get(`/api/v1/projects/${project.id}/dashboard`)).body.overdue).toBe(0);
+    expect((await pm.get(`/api/v1/projects/${project.id}/dashboard`)).body.overdue).toBe(1);
 
     const reassignment=await pm.post(`/api/v1/tasks/${fatigue.id}/reassignments`).send({new_owner_id:loginIds['scientist2.demo'],reviewer_id:loginIds['reviewer.demo'],reason:'Scientist one unavailable'});
     expect(reassignment.status).toBe(201);

@@ -27,7 +27,7 @@ export async function issueSession(res: Response, userId: number) {
   const token = randomBytes(32).toString('hex');
   const hash = createHash('sha256').update(token).digest('hex');
   await query(db, 'INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval \'12 hours\')', [hash,userId]);
-  res.cookie('cvrde_session', token, { httpOnly: true, sameSite: 'strict', secure: process.env.COOKIE_SECURE === 'true', maxAge: 12 * 3600 * 1000, path: '/' });
+  res.cookie('cvrde_session', token, { httpOnly: true, sameSite: 'strict', secure: process.env.COOKIE_SECURE === 'true' || (Boolean(process.env.VERCEL) && process.env.COOKIE_SECURE !== 'false'), maxAge: 12 * 3600 * 1000, path: '/' });
 }
 export async function getProject(projectId: number) {
   const project = await one<{ id:number; manager_id:number; name:string }>(db,'SELECT id,manager_id,name FROM projects WHERE id=$1',[projectId]);

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { db, one, pool } from './db.js';
 import { notify } from './core.js';
 

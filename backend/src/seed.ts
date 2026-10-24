@@ -1,7 +1,5 @@
-import 'dotenv/config';
+import './env.js';
 import bcrypt from 'bcryptjs';
-import { mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { db, one, query, pool } from './db.js';
@@ -9,13 +7,10 @@ import { history } from './core.js';
 
 const password=process.env.DEMO_PASSWORD;
 if(!password || password.length<12)throw new Error('Set DEMO_PASSWORD to at least 12 characters');
-const uploadDir=process.env.UPLOAD_DIR || './uploads';mkdirSync(uploadDir,{recursive:true});
 const day=(offset:number)=>new Date(Date.now()+offset*86400000).toISOString().slice(0,10);
 const demo='Engine Component Development — Demo';
 const hash=await bcrypt.hash(password,12);
 const ids:Record<string,number>={};
-const files:Array<{stored:string;data:Uint8Array}>=[];
-let oldFiles:string[]=[];
 const xml=(text:string)=>text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]!));
 function docx(text:string){return zipSync({
   '[Content_Types].xml':strToU8('<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'),
@@ -44,7 +39,6 @@ try{
     for(const [username,full_name,role,email] of demoUsers){
       const row=await one<{id:number}>(tx,`INSERT INTO users(username,password_hash,full_name,email,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash,full_name=excluded.full_name,email=excluded.email,role=excluded.role,active=true RETURNING id`,[username,hash,full_name,email,role]);ids[username]=row!.id;
     }
-    oldFiles=(await query<{stored_name:string}>(tx,'SELECT a.stored_name FROM attachments a JOIN projects p ON p.id=a.project_id WHERE p.name=$1 AND p.manager_id=$2',[demo,ids['pm.demo']])).map(x=>x.stored_name);
     await query(tx,'DELETE FROM projects WHERE name=$1 AND manager_id=$2',[demo,ids['pm.demo']]);
     const project=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING id',[demo,'Fictional pilot project',day(60),ids['pm.demo']]);const pid=project!.id;
     for(const username of ['scientist1.demo','scientist2.demo'])await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2)',[pid,ids[username]]);
@@ -58,13 +52,37 @@ try{
     const sample=await task('Material sample testing',ids['scientist1.demo'],-5,'IN_PROGRESS','HIGH',null,thermal!.id);
     const report=await task('Thermal analysis report',ids['scientist2.demo'],12,'SUBMITTED','HIGH',null,test!.id);
     const drawing=await task('Component drawing review',ids['scientist2.demo'],-10,'COMPLETED','LOW');
+    const instrumentation=await task('Instrumentation readiness review',ids['scientist2.demo'],4,'SUBMITTED','HIGH',parent,test!.id);
+    const sensor=await task('Sensor calibration records',ids['scientist2.demo'],-2,'IN_PROGRESS','HIGH',instrumentation,thermal!.id);
+    const vibration=await task('Vibration test matrix',ids['scientist1.demo'],14,'NEW','MEDIUM',parent,test!.id);
+    const coupon=await task('Coupon batch traceability',ids['scientist1.demo'],6,'IN_PROGRESS','MEDIUM',parent);
+    const fixture=await task('Fixture drawing release',ids['scientist2.demo'],22,'NEW','LOW');
+    const safety=await task('Test cell safety checklist',ids['scientist1.demo'],-3,'COMPLETED','HIGH',parent);
+    await task('Thermal soak procedure',ids['scientist2.demo'],18,'NEW','MEDIUM',parent,thermal!.id);
+    await task('Load case correlation',ids['scientist2.demo'],26,'IN_PROGRESS','MEDIUM',null,test!.id);
+    await task('Failure mode review',ids['scientist1.demo'],35,'NEW','HIGH',parent);
+    await task('Prototype inspection plan',ids['scientist1.demo'],9,'IN_PROGRESS','LOW');
+    await task('Final evidence package',ids['scientist2.demo'],45,'NEW','MEDIUM',parent);
+    await query(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,1,$2,$3,$4)',[instrumentation,'Reviewed channel map and sensor locations','Ready for manager review',ids['scientist2.demo']]);
+    await query(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now())",[safety,'Safety checks completed','Test cell cleared',ids['scientist1.demo'],ids['pm.demo']]);
+    for(const [taskId,author,body] of [
+      [calibration,ids['scientist1.demo'],'Calibration sequence started; awaiting cross-check of the thermal channel.'],
+      [instrumentation,ids['scientist2.demo'],'Updated channel map attached to the review package.'],
+      [coupon,ids['scientist1.demo'],'Batch records received from the materials lab.'],
+      [sensor,ids['scientist2.demo'],'Two thermocouples need a repeat check before sign-off.'],
+      [fixture,ids['pm.demo'],'Please align the release drawing with the latest test rig revision.']
+    ] as [number,number,string][])await query(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3)',[taskId,author,body]);
+    await query(tx,'INSERT INTO reassignments(task_id,original_owner_id,new_owner_id,reason,requested_by,reviewer_id) VALUES($1,$2,$3,$4,$5,$6)',[fixture,ids['scientist2.demo'],ids['scientist1.demo'],'Balance drawing review workload',ids['pm.demo'],ids['reviewer.demo']]);
+    await query(tx,'INSERT INTO due_date_extensions(task_id,requested_by,old_due_date,new_due_date,reason) VALUES($1,$2,$3,$4,$5)',[sensor,ids['scientist2.demo'],day(-2),day(5),'Replacement sensor arriving this week']);
+    const p2=await one<{id:number}>(tx,"INSERT INTO pendencies(raised_by,blocked_task_id,responsible_user_id,type,description,needs_approval,approver_id,status) VALUES($1,$2,$3,'ACTION',$4,true,$5,'AWAITING_APPROVAL') RETURNING id",[ids['scientist1.demo'],vibration,ids['scientist2.demo'],'Confirm fixture availability for vibration setup',ids['pm.demo']]);
+    await query(tx,'INSERT INTO pendency_dependencies(pendency_id,depends_on_task_id) VALUES($1,$2)',[p2!.id,fixture]);
     await query(tx,'INSERT INTO due_date_extensions(task_id,requested_by,old_due_date,new_due_date,reason) VALUES($1,$2,$3,$4,$5)',[sample,ids['scientist1.demo'],day(-5),day(7),'Awaiting additional test material']);
     const p=await one<{id:number}>(tx,`INSERT INTO pendencies(raised_by,blocked_task_id,responsible_user_id,type,description,needs_approval,approver_id,status) VALUES($1,$2,$3,'CLARIFICATION',$4,false,$5,'OPEN') RETURNING id`,[ids['scientist1.demo'],calibration,ids['scientist2.demo'],'Confirm thermal analysis inputs',ids['pm.demo']]);
     await query(tx,'INSERT INTO pendency_dependencies(pendency_id,depends_on_task_id) VALUES($1,$2)',[p!.id,report]);
     const v1=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at,review_comment) VALUES($1,1,$2,$3,$4,'RETURNED',$5,now(),$6) RETURNING id",[report,'Initial thermal model','First pass completed',ids['scientist2.demo'],ids['pm.demo'],'Revise assumptions']);
     const v2=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,2,$2,$3,$4) RETURNING id",[report,'Revised thermal model','Updated values ready for review',ids['scientist2.demo']]);
     const accepted=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now()) RETURNING id",[drawing,'Drawing checked','Review complete',ids['scientist2.demo'],ids['pm.demo']]);
-    async function attachment(name:string,data:Uint8Array,mime:string,key:string,taskId:number|null,resultId:number|null,version:number){const stored=randomUUID();files.push({stored,data});await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[pid,taskId,resultId,key,version,name,stored,mime,data.length,taskId?ids['scientist2.demo']:ids['pm.demo']]);}
+    async function attachment(name:string,data:Uint8Array,mime:string,key:string,taskId:number|null,resultId:number|null,version:number){await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[pid,taskId,resultId,key,version,name,randomUUID(),mime,data.length,taskId?ids['scientist2.demo']:ids['pm.demo'],Buffer.from(data)]);}
     await attachment('thermal_results.xlsx',xlsx('Thermal results version 1'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`task:${report}:thermal_results`,report,v1!.id,1);
     await attachment('thermal_results.xlsx',xlsx('Thermal results version 2'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`task:${report}:thermal_results`,report,v2!.id,2);
     await attachment('review_notes.pdf',pdf('Demo drawing review notes'),'application/pdf',`task:${drawing}:review_notes`,drawing,accepted!.id,1);
@@ -75,7 +93,5 @@ try{
     await history(tx,pid,sample,'EXTENSION_REQUESTED',ids['scientist1.demo'],{old_due_date:day(-5),new_due_date:day(7)});
     await history(tx,pid,calibration,'PENDENCY_RAISED',ids['scientist1.demo'],{pendency_id:p!.id});
   });
-  for(const file of files)writeFileSync(join(uploadDir,file.stored),file.data);
-  for(const stored of oldFiles)if(/^[0-9a-f-]{36}$/i.test(stored))try{unlinkSync(join(uploadDir,stored));}catch{}
   console.log(`Demo project reset; usernames: ${Object.keys(ids).join(', ')}. Password from DEMO_PASSWORD.`);
 }finally{await pool.end();}

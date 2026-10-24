@@ -6,11 +6,14 @@
     "frontend"
   ],
   "scripts": {
-    "dev:api": "npm run dev -w backend",
-    "dev:web": "npm run dev -w frontend",
+    "dev": "node scripts/dev.mjs",
     "build": "npm run build -w backend && npm run build -w frontend",
     "test": "npm run test -w backend",
+    "smoke": "npm run build -w backend && node scripts/smoke.mjs",
+    "check:vercel-entry": "node --import tsx scripts/check-vercel-entry.mjs",
+    "start:local": "npm run build && node scripts/serve-built.mjs",
     "migrate": "npm run migrate -w backend",
+    "backfill:files": "npm run backfill:files -w backend",
     "seed": "npm run seed -w backend"
   },
   "devDependencies": {

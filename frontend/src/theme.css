@@ -1,0 +1,77 @@
+:root{
+  font-family:Inter,"Segoe UI",ui-sans-serif,system-ui,sans-serif;
+  color:#17263b;
+  background:#f5f7fa;
+}
+body{background:#f5f7fa}
+button,input,select,textarea{transition:border-color .18s,box-shadow .18s,background .18s,transform .18s}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #99dcd4;outline-offset:2px}
+button:hover{transform:translateY(-1px)}
+input:focus,select:focus,textarea:focus{border-color:#168b83;box-shadow:0 0 0 3px #1b9b8d1f;outline:0}
+.shell{grid-template-columns:268px minmax(0,1fr);background:#f5f7fa;transition:grid-template-columns .24s ease}
+.shell.sidebar-collapsed{grid-template-columns:78px minmax(0,1fr)}
+.sidebar{
+  position:sticky;top:0;height:100vh;max-height:100vh;overflow:hidden;
+  background:linear-gradient(168deg,#101e35 0%,#142842 56%,#113443 100%);
+  color:#e8f4f3;padding:24px 15px 20px;gap:0;box-shadow:5px 0 24px #152d4b17;
+}
+.sidebar-brand-row{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 6px 24px;border-bottom:1px solid #ffffff19}
+.sidebar .brand{padding:0;min-width:0}
+.brand-icon{flex:0 0 auto;border-radius:12px;background:linear-gradient(145deg,#36c0a9,#087b80);box-shadow:0 6px 18px #1de1c339}
+.brand-copy{min-width:0;white-space:nowrap}
+.brand-copy strong{font-size:1.1rem;letter-spacing:.08em}
+.brand-copy small{font-size:.57rem;letter-spacing:.15em;color:#a2bbc9}
+.collapse-button{flex:0 0 auto;border:1px solid #ffffff27;border-radius:9px;background:#ffffff0b;color:#c9e5e4;width:28px;height:28px;padding:0;font-size:1.2rem;line-height:1}
+.collapse-button:hover{background:#ffffff20;color:#fff}
+.nav-caption{color:#7995a8;font-size:.64rem;font-weight:800;letter-spacing:.18em;margin:27px 17px 12px}
+.sidebar nav{gap:5px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#446477 transparent}
+.sidebar nav button{display:flex;align-items:center;gap:13px;white-space:nowrap;border-radius:10px;padding:12px 15px;font-weight:600;color:#aebfcd}
+.sidebar nav button.active{background:#47b9a928;color:#eafff8;box-shadow:inset 3px 0 #58d4bc}
+.sidebar nav button:hover{background:#ffffff12;color:#fff}
+.nav-icon{display:inline-flex;width:22px;justify-content:center;align-items:center;flex:0 0 22px;font-size:1.2rem;line-height:1}
+.sidebar-foot{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;column-gap:10px;row-gap:10px;margin-top:auto;padding:18px 8px 0;border-color:#ffffff1b}
+.user-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:#dffbf3;background:#327b80;font-weight:800}
+.user-copy{min-width:0}
+.user-copy strong{font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-copy small{font-size:.68rem;color:#9fbdc5}
+.sidebar-foot button{grid-column:1/-1;display:flex;align-items:center;gap:11px;padding:9px 10px;margin:0;border-radius:9px;border-color:#ffffff26;text-align:left;font-size:.75rem}
+.sidebar-collapsed .sidebar{padding-inline:10px}
+.sidebar-collapsed .sidebar-brand-row{display:grid;justify-items:center;padding-inline:0;gap:13px}
+.sidebar-collapsed .brand-copy,.sidebar-collapsed .nav-caption,.sidebar-collapsed .nav-label,.sidebar-collapsed .user-copy{display:none}
+.sidebar-collapsed .sidebar nav button{justify-content:center;padding:12px 0}
+.sidebar-collapsed .sidebar-foot{display:grid;justify-items:center;grid-template-columns:1fr;padding-inline:0}
+.sidebar-collapsed .sidebar-foot button{justify-content:center;width:100%;padding:9px 0}
+main{padding:36px min(4.2vw,64px) 70px}
+.top{padding-bottom:24px;border-bottom:1px solid #e1e8ed;margin-bottom:26px}
+.top h1{font-size:2rem;font-weight:760;letter-spacing:-.045em;color:#142b42}
+.eyebrow{color:#178a80;letter-spacing:.19em}
+.demo-badge{background:#e9f7f3;border-color:#bee4d9;color:#16786f}
+.card,.stat{border:1px solid #e4eaf0;box-shadow:0 6px 24px #18374b0a,0 1px 2px #18374b08;border-radius:16px}
+.card{padding:24px}
+.card-head{border-bottom:1px solid #eef1f4;padding-bottom:15px;margin-bottom:17px}
+.card-head h2{font-size:1.04rem;font-weight:740;color:#1b3448}
+.stat{padding:22px;background:linear-gradient(145deg,#fff,#fbfdfd)}
+.stat strong{color:#0d6e72;font-weight:760}
+table{font-size:.84rem}
+th{background:#f8fafb;color:#708391;font-size:.66rem}
+tr.clickable:hover{background:#f1f8f7}
+.pill{font-size:.64rem;letter-spacing:.04em;padding:6px 10px}
+.primary{background:linear-gradient(135deg,#0c777c,#129585);border-color:#0c777c;box-shadow:0 4px 10px #0f8d7b29}
+.primary:hover{background:#086d72;box-shadow:0 6px 15px #0f8d7b38}
+.login-wrap{background:radial-gradient(circle at 14% 15%,#1d5360 0,#132d46 34%,#101f35 69%);padding:30px}
+.login-panel{width:min(500px,calc(100vw - 32px));padding:36px 38px;border:1px solid #e5edf0;box-shadow:0 24px 80px #07152570;border-radius:20px}
+.login-panel .brand{margin-bottom:30px}
+.login-panel h1{margin:9px 0 6px;color:#172d41;font-size:2.25rem}
+.login-panel .muted{line-height:1.55}
+.demo-logins{background:#f3f8f8;border:1px solid #dceceb;border-radius:14px;padding:16px;margin-top:20px}
+.demo-logins>strong{display:block;font-size:.85rem;color:#183c48}
+.demo-logins p{font-size:.76rem;color:#66808a;margin:4px 0 12px}
+.demo-login-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.demo-login-grid button{display:grid;gap:2px;text-align:left;padding:10px 12px;background:#fff;border-color:#dbe7e8;font-size:.77rem}
+.demo-login-grid button:hover{background:#e6f4f0;border-color:#78c6bc}
+.demo-login-grid small{font-size:.67rem}
+.demo-logins>small{font-size:.71rem;overflow-wrap:anywhere}
+.demo-logins code{color:#116f6d;font-weight:700}
+.login-note{color:#899ba7}
+@media(max-width:900px){.shell{grid-template-columns:220px minmax(0,1fr)}.shell.sidebar-collapsed{grid-template-columns:74px minmax(0,1fr)}main{padding:28px}}
+@media(max-width:620px){.shell,.shell.sidebar-collapsed{display:block}.sidebar{position:sticky;top:0;height:auto;max-height:none;padding:10px 13px;z-index:20;box-shadow:0 4px 18px #172b4550}.sidebar-brand-row{border:0;padding:0}.sidebar .brand-icon{width:31px;height:31px;font-size:1.1rem}.sidebar .brand-copy strong{font-size:.9rem}.sidebar .brand-copy small{display:none}.nav-caption,.sidebar-foot{display:none}.sidebar nav{margin-top:8px;display:flex;gap:4px}.sidebar nav button{padding:8px 9px;font-size:.73rem}.nav-icon{font-size:.95rem;width:18px;flex-basis:18px}.sidebar-collapsed .sidebar-brand-row{display:flex;justify-content:space-between}.sidebar-collapsed .sidebar nav button{padding:9px}.top h1{font-size:1.6rem}main{padding:19px}.login-panel{padding:25px}}
