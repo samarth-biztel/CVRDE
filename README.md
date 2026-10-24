@@ -37,6 +37,82 @@ The interface uses a fixed, collapsible sidebar, light and dark themes, and **Cm
 
 Choose an account on the login page to fill both fields. The password is also shown there if the API is temporarily unavailable.
 
+## 🧭 From ticket to closure
+
+The UI calls a work ticket a **task**. A blocker or request for another person is a **pendency**. The Project Manager creates tasks; a Scientist owns and works each task; the Project Manager closes it by accepting its submitted result. There is no separate “Close ticket” button.
+
+```mermaid
+flowchart LR
+    New[NEW: PM assigns task] --> Active[IN_PROGRESS: owner starts]
+    Active --> Submitted[SUBMITTED: owner sends result]
+    Submitted -->|PM returns for changes| Active
+    Submitted -->|PM accepts result| Done[COMPLETED]
+```
+
+| Decision | Raised by | Decided or resolved by | Effect |
+|---|---|---|---|
+| Result review | Task owner submits work and outcome | Project Manager accepts or returns | Accept completes the task; return moves it back to **In Progress** for another result version. |
+| Due-date extension | Task owner requests a later date and gives a reason | Project Manager approves or rejects | Approval changes the task due date; rejection leaves it as it was. |
+| Reassignment | Project Manager proposes a new project member and gives a reason | Reviewer approves or rejects | Approval changes the owner; rejection keeps the current owner. |
+| Pendency | Task owner selects a blocked task, a visible dependency, and a responsible member | Project Manager approves or rejects; responsible member resolves an approved pendency | Approval opens the pendency; resolution closes the blocker. The task still needs a submitted and accepted result. |
+
+### 👨‍💼 Project Manager — `pm.demo`
+
+| Step | Where | What to do |
+|---|---|---|
+| 1. Prepare the project | **Projects** | Select the seeded project or create one. Add Scientist One and Scientist Two as members. Create groups and set sharing permissions when work must be visible to a team. |
+| 2. Raise a task | **Projects → Tasks** | Enter title and description, choose an owner, priority and due date, and optionally select a parent task. **Create task** puts it in **New**. |
+| 3. Track work | **Overview**, **Tasks**, **Projects** | Check total, completed and overdue counts; open a task to read comments, files, result versions, and history. Upload project documents from **Projects**. |
+| 4. Handle blockers and dates | **Pending** or **Task detail** | Approve or reject a Scientist’s pendency and due-date extension. Approved pendencies move to the responsible person’s queue. |
+| 5. Request a new owner | **Task detail → Reassignment** | Choose another project member and the Reviewer, enter a reason, and send the request. The owner changes only if the Reviewer approves. |
+| 6. Close the task | **Pending → Result review** or **Task detail → Status & results** | **Return** a result for corrections, or **Accept** it. Acceptance changes the task to **Completed**. |
+| 7. Report and audit | **Reports**, **Task detail → Task history** | Filter progress or overdue reports and export CSV. Inspect the activity trail and export a task’s history when needed. |
+
+### 🔬 Scientist One — `scientist1.demo`
+
+| Step | Where | What to do |
+|---|---|---|
+| 1. Pick up work | **Tasks → My and shared tasks** | Open an owned task. Shared group tasks may be visible too, but only the owner can start or submit its result. |
+| 2. Start and document | **Task detail** | Click **Start task** on a **New** task. Add progress comments, update details, and upload evidence. Reuse a document key to add another file version. |
+| 3. Raise a blocker | **Pendencies → Raise a pendency** | Choose your blocked task, a visible task it depends on, a responsible member such as Scientist Two, the type, and a description. The Project Manager reviews it; the responsible member resolves it if approved. |
+| 4. Request more time | **Task detail → Due date extensions** | Enter a later date and reason, then **Request extension**. Watch for the Project Manager’s decision. |
+| 5. Submit work | **Task detail → Status & results** | When the task is **In Progress**, describe work completed and its outcome, then **Submit for PM review**. The task becomes **Submitted**. |
+| 6. Finish corrections | **Task detail → Status & results** | If the Project Manager returns the result, read the comment, update the work, and submit another version. The task is **Completed** only after acceptance. |
+
+### 🧪 Scientist Two — `scientist2.demo`
+
+Scientist Two has the **same member permissions** as Scientist One. The seeded project gives them different tasks and makes them the responsible person in example blockers.
+
+| Step | Where | What to do |
+|---|---|---|
+| 1. Check assignments | **Tasks** | Open owned or permitted shared tasks. The seed includes tasks such as **Thermal analysis report** and **Instrumentation readiness review**. |
+| 2. Clear a blocker | **Pending → Pendency resolve** | When the Project Manager approves a pendency assigned to you, click **Resolve** and record the resolution. The status becomes **Resolved** and the raiser is notified. |
+| 3. Take over approved work | **Tasks** | If the Reviewer approves a reassignment to you, the task appears under your ownership. Start it if **New**, continue if **In Progress**, or await the Project Manager’s decision if **Submitted**. |
+| 4. Deliver evidence | **Task detail** | Comment, upload versioned files, request an extension if needed, and submit a result. If a result is returned, revise and resubmit it for Project Manager acceptance. |
+
+### ✅ Reviewer — `reviewer.demo`
+
+| Step | Where | What to do |
+|---|---|---|
+| 1. Open the queue | **Pending → Pending my action** | Find **Reassignment** requests. **View task** may show limited task information needed for this decision. |
+| 2. Decide | **Pending** | **Approve** to assign the task to the proposed Scientist, or **Reject** to keep its current owner. The decision appears in task history and notifies the people involved. |
+| 3. Hand work back | **Tasks / Pending** | The new owner works an approved task. The Project Manager, not the Reviewer, accepts the final result and completes the task. |
+
+### 🎬 Walk through all four accounts
+
+Start with `npm run seed` if you want the original fictional tasks and statuses. Each step changes shared demo data.
+
+| # | Account | Try this |
+|---|---|---|
+| 1 | **PM** | In **Projects**, create a task assigned to Scientist One. Give it a due date and optional parent task. |
+| 2 | **Scientist One** | In **Tasks**, open it, click **Start task**, add a comment, and upload a file. |
+| 3 | **Scientist One** | In **Pendencies**, raise a blocker on an owned task, link a visible task, and choose Scientist Two as responsible. |
+| 4 | **PM** | In **Pending**, approve the pendency. If Scientist One requested a due-date extension, approve or reject that separately. |
+| 5 | **Scientist Two** | In **Pending**, resolve the approved pendency with a written resolution. |
+| 6 | **Scientist One** | Return to the task and submit **Work completed** and **Outcome** for review. |
+| 7 | **PM → Scientist One → PM** | Return the result with a comment; have Scientist One revise and submit a new version; then **Accept** it. The task becomes **Completed**. |
+| 8 | **PM → Reviewer → Scientist Two** | On a different task, have PM request reassignment to Scientist Two. Reviewer approves in **Pending**; Scientist Two becomes its owner and can continue the work. |
+
 ## 🧱 Tech stack
 
 | Layer | Technology |
