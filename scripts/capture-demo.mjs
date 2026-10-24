@@ -2,8 +2,9 @@ import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const password=process.env.DEMO_PASSWORD;
-if(!password)throw new Error('Set DEMO_PASSWORD');
+const demoResponse=await fetch('http://localhost:5173/api/v1/auth/demo');
+if(!demoResponse.ok)throw new Error('Demo API is unavailable');
+const {password}=await demoResponse.json();
 const out=join(process.cwd(),'docs','screenshots');await mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--no-sandbox']});
 async function login(page,username){await page.goto('http://localhost:5173');await page.getByLabel('Username').fill(username);await page.getByLabel('Password').fill(password);await page.getByRole('button',{name:'Sign in'}).click();await page.getByText('PILOT DEMO').waitFor();}

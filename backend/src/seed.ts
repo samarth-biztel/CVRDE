@@ -4,9 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { db, one, query, pool } from './db.js';
 import { history } from './core.js';
+import { demoPassword } from './demo.js';
 
-const password=process.env.DEMO_PASSWORD;
-if(!password || password.length<12)throw new Error('Set DEMO_PASSWORD to at least 12 characters');
+const password=demoPassword;
 const day=(offset:number)=>new Date(Date.now()+offset*86400000).toISOString().slice(0,10);
 const demo='Engine Component Development — Demo';
 const hash=await bcrypt.hash(password,12);
@@ -93,5 +93,5 @@ try{
     await history(tx,pid,sample,'EXTENSION_REQUESTED',ids['scientist1.demo'],{old_due_date:day(-5),new_due_date:day(7)});
     await history(tx,pid,calibration,'PENDENCY_RAISED',ids['scientist1.demo'],{pendency_id:p!.id});
   });
-  console.log(`Demo project reset; usernames: ${Object.keys(ids).join(', ')}. Password from DEMO_PASSWORD.`);
+  console.log(`Demo project reset; usernames: ${Object.keys(ids).join(', ')}. Public demo password: ${demoPassword}.`);
 }finally{await pool.end();}

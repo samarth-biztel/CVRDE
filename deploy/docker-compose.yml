@@ -30,7 +30,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-CVRDE Demo <no-reply@example.invalid>}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:?set DEMO_PASSWORD}
       DEMO_EMAIL_PM: ${DEMO_EMAIL_PM:-}
       DEMO_EMAIL_S1: ${DEMO_EMAIL_S1:-}
       DEMO_EMAIL_S2: ${DEMO_EMAIL_S2:-}

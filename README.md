@@ -4,7 +4,7 @@ Fictional pilot for project, task, review, pendency, and reporting workflows. Th
 
 ## Local start
 
-1. Copy `.env.example` to `.env` in the repository root. Set `DATABASE_URL` to your Neon connection string and `DEMO_PASSWORD` to a unique value of at least 12 characters. `PUBLIC_DEMO_LOGIN=true` shows the four demo accounts and their shared password on the login screen.
+1. Copy `.env.example` to `.env` in the repository root. Set `DATABASE_URL` to your Neon connection string.
 2. From the repository root, run:
 
 ```powershell
@@ -19,7 +19,7 @@ npm run seed
 npm run dev
 ```
 
-Open `http://localhost:5173`. Demo accounts are `pm.demo`, `scientist1.demo`, `scientist2.demo`, and `reviewer.demo`. They share `DEMO_PASSWORD`. Seeding resets only the named fictional demo project and updates the four demo users.
+Open `http://localhost:5173`. Demo accounts are `pm.demo`, `scientist1.demo`, `scientist2.demo`, and `reviewer.demo`. Their public password is `CVRDE-Demo-2026!`, shown on the login page. Seeding resets only the named fictional demo project and updates the four demo users.
 
 ## One Vercel project
 
@@ -30,20 +30,18 @@ Set these environment variables in the Vercel project:
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | Neon PostgreSQL connection string |
-| `DEMO_PASSWORD` | Same 12+ character password used when seeding |
-| `PUBLIC_DEMO_LOGIN` | `true` to show the demo accounts and password on the login page |
 
 Before the first deployment, run `npm run migrate` and `npm run seed` locally against that Neon database. After schema changes, run migrations again before deploying the new code. Seeding is a deliberate reset of the demo project, so run it only when you want the sample data refreshed. The API uses secure cookies automatically on Vercel.
 
 For existing installations with files in `backend/uploads`, run `npm run backfill:files` after migration and before deployment. This copies old attachment bytes into PostgreSQL. New uploads are stored in PostgreSQL and work across Vercel function instances. Uploads are limited to 4 MB to fit Vercel's request size limit.
 
-`PUBLIC_DEMO_LOGIN=true` makes the shared demo password public. Use it only for a fictional demo database. The seeded accounts can edit that demo data. Do not reuse the demo password for another service.
+The shared demo password is deliberately public. Use this app only with the fictional demo database. The seeded accounts can edit that demo data. Do not reuse the demo password for another service.
 
 ### Demo login on deployed URLs
 
-The demo account names are always visible in the login form. The shared password comes from the API. For both `https://cvrde-five.vercel.app` and `https://biztel-ai-cvrde.vercel.app`, open `/api/v1/auth/demo` after deployment. A JSON response with four accounts means the API is configured. A `404` with `Demo login unavailable` means `PUBLIC_DEMO_LOGIN=true` or `DEMO_PASSWORD` is missing. A function error or `500` can indicate that `DATABASE_URL` is missing or the API failed to initialize.
+The demo account names and password are built into the fictional pilot and remain visible even if the API is temporarily unavailable. For both `https://cvrde-five.vercel.app` and `https://biztel-ai-cvrde.vercel.app`, open `/health` after deployment. A `500` or `FUNCTION_INVOCATION_FAILED` means the API has failed to start; check the function logs and `DATABASE_URL`. The frontend can show the password, but sign in still requires a working API and a database seeded with the same password.
 
-The local root `.env` is ignored by Git and is not sent to Vercel. Add `DATABASE_URL`, `DEMO_PASSWORD`, and `PUBLIC_DEMO_LOGIN=true` in each Vercel project's **Settings → Environment Variables** for the environment that serves its URL. If both domains point to one project, configure that project once. Redeploy after changing variables, because older deployments keep their previous values.
+The local root `.env` is ignored by Git and is not sent to Vercel. Add `DATABASE_URL` in each Vercel project's **Settings → Environment Variables** for the environment that serves its URL. If both domains point to one project, configure that project once. Redeploy after changing variables, because older deployments keep their previous values. Run `npm run seed` again to set the public password on existing demo accounts.
 
 ## Optional email
 

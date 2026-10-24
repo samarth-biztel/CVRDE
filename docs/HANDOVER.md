@@ -21,7 +21,7 @@
 
 ## Configuration
 
-For Vercel, set `DATABASE_URL`, `DEMO_PASSWORD`, and `PUBLIC_DEMO_LOGIN=true` in one project. For local development, copy the root `.env.example` to the root `.env`. SMTP values and four controlled `DEMO_EMAIL_*` inboxes are optional for mail verification. Keep `.env` outside Git.
+For Vercel, set `DATABASE_URL` in one project. For local development, copy the root `.env.example` to the root `.env`. The fictional demo password is public and stored in `backend/src/demo.ts`; run `npm run seed` after changing it. SMTP values and four controlled `DEMO_EMAIL_*` inboxes are optional for mail verification. Keep `.env` outside Git.
 
 Neon holds the PostgreSQL database and attachment bytes. Back up the database. Existing disk attachments can be copied with `npm run backfill:files` after migration. The API needs outbound TLS access to Neon. An isolated CVRDE deployment must use local PostgreSQL instead.
 

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db, one, query } from './db.js';
 import { authenticate, currentUser, getProject, handler, history, HttpError, issueSession, notify, projectManager, projectMember, role, taskAccess, taskById, uid, visibleTaskIds, type Task, type User } from './core.js';
 import { fileRoutes } from './files.js';
+import { demoAccounts, demoPassword } from './demo.js';
 
 export const api = Router();
 const parse = <T extends z.ZodTypeAny>(schema:T,value:unknown):z.infer<T> => schema.parse(value);
@@ -16,13 +17,7 @@ const taskInput = z.object({title:z.string().trim().min(1).max(200),description:
 const attempts = new Map<string,{count:number;until:number}>();
 api.get('/auth/demo',(_req,res)=>{
   res.setHeader('Cache-Control','no-store');
-  if(process.env.PUBLIC_DEMO_LOGIN!=='true' || !process.env.DEMO_PASSWORD)return res.status(404).json({error:'Demo login unavailable'});
-  return res.json({password:process.env.DEMO_PASSWORD,accounts:[
-    {username:'pm.demo',label:'Project Manager'},
-    {username:'scientist1.demo',label:'Scientist One'},
-    {username:'scientist2.demo',label:'Scientist Two'},
-    {username:'reviewer.demo',label:'Reviewer'}
-  ]});
+  return res.json({password:demoPassword,accounts:demoAccounts});
 });
 api.post('/auth/login',handler(async(req,res)=>{
   const {username,password}=parse(z.object({username:z.string().min(1),password:z.string().min(1)}),req.body);

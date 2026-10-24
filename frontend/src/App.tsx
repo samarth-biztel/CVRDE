@@ -1,8 +1,10 @@
-import {useEffect,useState,type FormEvent,type ReactNode} from 'react';
+import {useEffect,useLayoutEffect,useState,type FormEvent,type MouseEvent,type ReactNode} from 'react';
+import {flushSync} from 'react-dom';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {api,post,patch,del,dateOnly,type User,type Project,type Task,type Group,type Action,type Result,type Attachment,type Pendency} from './api';
 import CommandPalette from './CommandPalette';
-import {Moon,PanelLeftClose,PanelLeftOpen,Search,Sun} from 'lucide-react';
+import {demoAccounts,demoPassword} from '../../backend/src/demo';
+import {ChartNoAxesCombined,FolderKanban,Inbox,LayoutDashboard,ListTodo,LogOut,Moon,PanelLeftClose,PanelLeftOpen,Search,Sun,TriangleAlert} from 'lucide-react';
 import {motion,useReducedMotion} from 'motion/react';
 
 const field=(form:HTMLFormElement,key:string)=>String(new FormData(form).get(key)||'').trim();
@@ -34,18 +36,29 @@ function App(){
   const [commandOpen,setCommandOpen]=useState(false);
   useInteractiveTestIds(user?.role.toLowerCase()||'guest',user?screen:'login');
   useEffect(()=>{localStorage.setItem('cvrde-sidebar-collapsed',String(collapsed));},[collapsed]);
-  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('cvrde-theme',theme);},[theme]);
+  useLayoutEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('cvrde-theme',theme);},[theme]);
+  function toggleTheme(event:MouseEvent<HTMLButtonElement>){
+    const next=theme==='light'?'dark':'light';
+    const rect=event.currentTarget.getBoundingClientRect();
+    const x=rect.left+rect.width/2,y=rect.top+rect.height/2;
+    if(reducedMotion||!document.startViewTransition){setTheme(next);return}
+    const radius=Math.hypot(Math.max(x,window.innerWidth-x),Math.max(y,window.innerHeight-y));
+    document.documentElement.classList.add('theme-transitioning');
+    const transition=document.startViewTransition(()=>{document.documentElement.dataset.theme=next;flushSync(()=>setTheme(next))});
+    transition.ready.then(()=>document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${radius}px at ${x}px ${y}px)`]},{duration:580,easing:'cubic-bezier(.22,1,.36,1)',pseudoElement:'::view-transition-new(root)'})).catch(()=>{});
+    transition.finished.finally(()=>document.documentElement.classList.remove('theme-transitioning'));
+  }
   useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();setCommandOpen(open=>!open)}if(event.key==='Escape')setCommandOpen(false)};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
   useEffect(()=>{api<User>('/auth/me').then(u=>{setUser(u);setScreen(u.role==='PM'?'overview':u.role==='MEMBER'?'tasks':'pending')}).catch(()=>{});},[]);
   async function run(action:()=>Promise<unknown>,success='Saved'){setError('');setMessage('');try{await action();setMessage(success);await qc.invalidateQueries();}catch(e){setError(e instanceof Error?e.message:String(e));}}
   function go(name:string){setScreen(name);setTaskId(null);setMessage('');setError('');}
-  if(!user)return <Login theme={theme} onThemeChange={()=>setTheme(theme==='light'?'dark':'light')} onLogin={u=>{setUser(u);setScreen(u.role==='PM'?'overview':u.role==='MEMBER'?'tasks':'pending')}}/>;
+  if(!user)return <Login theme={theme} onThemeChange={toggleTheme} onLogin={u=>{setUser(u);setScreen(u.role==='PM'?'overview':u.role==='MEMBER'?'tasks':'pending')}}/>;
   const showTask=(id:number)=>{setTaskId(id);setScreen('task');setMessage('');setError('');};
-  const navItems=[['overview','OV'],['projects','PR'],['tasks','TA'],['pending','IN'],['pendencies','PD'],['reports','RE']] as const;
+  const navItems=[['overview',LayoutDashboard],['projects',FolderKanban],['tasks',ListTodo],['pending',Inbox],['pendencies',TriangleAlert],['reports',ChartNoAxesCombined]] as const;
   return <div className={'shell'+(collapsed?' sidebar-collapsed':'')}><aside className="sidebar"><div className="sidebar-brand-row"><div className="brand"><span className="brand-icon">C</span><div className="brand-copy"><strong>CVRDE</strong><small>WORK MANAGEMENT</small></div></div><button data-testid="toggle-sidebar" className="collapse-button" title={collapsed?'Expand sidebar':'Collapse sidebar'} aria-label={collapsed?'Expand sidebar':'Collapse sidebar'} onClick={()=>setCollapsed(!collapsed)}>{collapsed?<PanelLeftOpen size={16} strokeWidth={1.5}/>:<PanelLeftClose size={16} strokeWidth={1.5}/>}</button></div><div className="nav-caption">WORKSPACE</div><nav>
-    {navItems.map(([name,short])=><button key={name} data-testid={`nav-${name}`} title={name[0]!.toUpperCase()+name.slice(1)} className={screen===name?'active':''} onClick={()=>go(name)}><span className="nav-icon">{short}</span><span className="nav-label">{name[0]!.toUpperCase()+name.slice(1)}</span></button>)}
-  </nav><div className="sidebar-foot"><div className="user-avatar">{user.full_name.slice(0,1)}</div><div className="user-copy"><strong>{user.full_name}</strong><small>{user.role}</small></div><button title="Sign out" aria-label="Sign out" onClick={()=>run(async()=>{await post('/auth/logout',{});setUser(null)},'Signed out')}><span className="nav-icon">↪</span><span className="nav-label">Sign out</span></button></div></aside>
-  <motion.main key={screen} initial={reducedMotion?false:{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:reducedMotion?0:.22}}><header className="top"><div><span className="eyebrow">ENGINE COMPONENT DEVELOPMENT</span><h1>{screen==='task'?'Task detail':screen[0]!.toUpperCase()+screen.slice(1)}</h1></div><div className="top-actions"><button data-testid="open-command-palette" className="search-trigger" onClick={()=>setCommandOpen(true)}><Search size={15} strokeWidth={1.5}/><span>Search workspace</span><kbd>⌘ K</kbd></button><button data-testid="toggle-theme" className="theme-toggle" aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} onClick={()=>setTheme(theme==='light'?'dark':'light')}>{theme==='light'?<Moon size={15} strokeWidth={1.5}/>:<Sun size={15} strokeWidth={1.5}/>}<span>{theme==='light'?'Dark mode':'Light mode'}</span></button><span className="demo-badge">PILOT DEMO</span></div></header>
+    {navItems.map(([name,Icon])=><button key={name} data-testid={`nav-${name}`} title={name[0]!.toUpperCase()+name.slice(1)} aria-label={name[0]!.toUpperCase()+name.slice(1)} aria-current={screen===name?'page':undefined} className={screen===name?'active':''} onClick={()=>go(name)}><span className="nav-icon"><Icon size={18} strokeWidth={1.5}/></span><span className="nav-label">{name[0]!.toUpperCase()+name.slice(1)}</span></button>)}
+  </nav><div className="sidebar-foot"><div className="user-avatar">{user.full_name.slice(0,1)}</div><div className="user-copy"><strong>{user.full_name}</strong><small>{user.role}</small></div><button title="Sign out" aria-label="Sign out" onClick={()=>run(async()=>{await post('/auth/logout',{});setUser(null)},'Signed out')}><span className="nav-icon"><LogOut size={18} strokeWidth={1.5}/></span><span className="nav-label">Sign out</span></button></div></aside>
+  <motion.main key={screen} initial={reducedMotion?false:{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:reducedMotion?0:.22}}><header className="top"><div><span className="eyebrow">ENGINE COMPONENT DEVELOPMENT</span><h1>{screen==='task'?'Task detail':screen[0]!.toUpperCase()+screen.slice(1)}</h1></div><div className="top-actions"><button data-testid="open-command-palette" className="search-trigger" onClick={()=>setCommandOpen(true)}><Search size={15} strokeWidth={1.5}/><span>Search workspace</span><kbd>⌘ K</kbd></button><button data-testid="toggle-theme" className="theme-toggle" title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} onClick={toggleTheme}>{theme==='light'?<Moon size={18} strokeWidth={1.5}/>:<Sun size={18} strokeWidth={1.5}/>}</button><span className="demo-badge">PILOT DEMO</span></div></header>
     {message&&<div className="notice success">{message}</div>}{error&&<div className="notice error">{error}</div>}
     {screen==='overview'&&<Overview user={user} projectId={projectId} onProject={setProjectId} onTask={showTask}/>}
     {screen==='projects'&&<Projects user={user} projectId={projectId} onProject={setProjectId} onTask={showTask} run={run}/>}
@@ -56,23 +69,15 @@ function App(){
     {screen==='reports'&&<Reports user={user} projectId={projectId} onProject={setProjectId}/>}
   </motion.main><CommandPalette open={commandOpen} onClose={()=>setCommandOpen(false)} onNavigate={go} onTask={showTask} projectId={projectId} role={user.role}/></div>;
 }
-type DemoLogin={password:string;accounts:{username:string;label:string}[]};
-const demoAccounts=[
-  {username:'pm.demo',label:'Project Manager'},
-  {username:'scientist1.demo',label:'Scientist One'},
-  {username:'scientist2.demo',label:'Scientist Two'},
-  {username:'reviewer.demo',label:'Reviewer'}
-];
-function Login({onLogin,theme,onThemeChange}:{onLogin:(u:User)=>void;theme:'light'|'dark';onThemeChange:()=>void}){
+function Login({onLogin,theme,onThemeChange}:{onLogin:(u:User)=>void;theme:'light'|'dark';onThemeChange:(event:MouseEvent<HTMLButtonElement>)=>void}){
   const [error,setError]=useState(''),[loading,setLoading]=useState(false);
   const [username,setUsername]=useState(''),[password,setPassword]=useState('');
-  const demo=useQuery({queryKey:['demo-login'],queryFn:()=>api<DemoLogin>('/auth/demo'),retry:false});
   async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setLoading(true);setError('');try{onLogin(await post<User>('/auth/login',{username,password}));}catch(err){setError(err instanceof Error?err.message:'Login failed')}finally{setLoading(false)}}
   return <div className="login-wrap"><div className="login-panel">
-    <div className="login-tools"><button data-testid="login-toggle-theme" onClick={onThemeChange}>{theme==='light'?'Dark mode':'Light mode'}</button></div>
+    <div className="login-tools"><button data-testid="login-toggle-theme" className="theme-toggle" title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} onClick={onThemeChange}>{theme==='light'?<Moon size={18} strokeWidth={1.5}/>:<Sun size={18} strokeWidth={1.5}/>}</button></div>
     <div className="brand dark"><span className="brand-icon">C</span><div><strong>CVRDE</strong><small>Work Management Demo</small></div></div>
     <span className="eyebrow">SECURE PROJECT WORKSPACE</span><h1>Welcome back</h1><p className="muted">Sign in to the engine component work management pilot.</p>
-    <div className="demo-logins"><strong>Explore as a demo user</strong><p>Choose a role to fill the sign in form.</p><div className="demo-login-grid">{(demo.data?.accounts||demoAccounts).map(account=><button data-testid={`demo-${account.username.replaceAll('.','-')}`} type="button" key={account.username} onClick={()=>{setUsername(account.username);if(demo.data?.password)setPassword(demo.data.password)}}><span>{account.label}</span><small>{account.username}</small></button>)}</div>{demo.data?<small>Shared demo password: <code>{demo.data.password}</code></small>:demo.isError?<small>Demo password is unavailable on this deployment. Ask the project owner to enable demo access.</small>:<small>Loading demo access…</small>}</div>
+    <div className="demo-logins"><strong>Explore as a demo user</strong><p>Choose a role to fill the sign in form.</p><div className="demo-login-grid">{demoAccounts.map(account=><button data-testid={`demo-${account.username.replaceAll('.','-')}`} type="button" key={account.username} onClick={()=>{setUsername(account.username);setPassword(demoPassword)}}><span>{account.label}</span><small>{account.username}</small></button>)}</div><small>Shared demo password: <code>{demoPassword}</code></small></div>
     <form onSubmit={submit} className="stack"><label>Username<input data-testid="login-username" name="username" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required/></label><label>Password<input data-testid="login-password" name="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<div className="notice error">{error}</div>}<button data-testid="login-submit" className="primary" disabled={loading}>{loading?'Signing in…':'Sign in'}</button></form>
     <p className="login-note">Fictional pilot data only</p>
   </div></div>;

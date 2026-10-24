@@ -37,4 +37,4 @@ npm run smoke
 npm run check:vercel-entry
 ```
 
-The local test uses the `DATABASE_URL` and `DEMO_PASSWORD` environment variables. The test changes demo data; run `npm run seed` again afterward.
+The local test uses `DATABASE_URL` and the public demo password in the repository. The test changes demo data; run `npm run seed` again afterward.

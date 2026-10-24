@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/server.js';
+import { demoPassword } from '../src/demo.js';
 
 describe('fictional demo workflows', () => {
   it('enforces visibility and completes approval and result flows', async () => {
-    const password=process.env.DEMO_PASSWORD;
-    if(!process.env.DATABASE_URL || !password)throw new Error('Set DATABASE_URL and DEMO_PASSWORD; run npm run migrate and npm run seed before this test');
+    const password=demoPassword;
+    if(!process.env.DATABASE_URL)throw new Error('Set DATABASE_URL; run npm run migrate and npm run seed before this test');
     const pm=request.agent(app),s1=request.agent(app),s2=request.agent(app),reviewer=request.agent(app);
     const loginIds:Record<string,number>={};
     for(const [agent,username] of [[pm,'pm.demo'],[s1,'scientist1.demo'],[s2,'scientist2.demo'],[reviewer,'reviewer.demo']] as const){
