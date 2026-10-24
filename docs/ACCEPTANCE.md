@@ -1,6 +1,6 @@
 # Acceptance checklist
 
-This checklist follows the revision 4 plan. The earlier workflow tests ran against temporary PostgreSQL 17. The Vercel adaptation was checked against Neon with the smoke script and browser build; the public Vercel deployment still needs verification.
+This checklist follows the revision 4 plan. The earlier workflow tests ran against temporary PostgreSQL 17. The Vercel adaptation was checked against Neon with the smoke script and browser build. Both public domains returned a healthy API response and accepted the demo PM login on October 24, 2026; broader deployed workflows remain to be checked.
 
 | Check | Status | Evidence or next check |
 |---|---|---|
@@ -21,7 +21,7 @@ This checklist follows the revision 4 plan. The earlier workflow tests ran again
 | URL and request tampering rejected | Verified locally | Cross-user 403/404 checks in API test |
 | Upload type, size, and authorized download | Partially verified | Valid Office file and mismatched PDF rejected/accepted as expected; size limit is configured but not separately load-tested |
 | Assignment, reassignment, status, and pendency emails | Needs SMTP | Configure four test inboxes, run `npm run test-email -w backend`, then exercise each event |
-| HTTPS from a separate device | Needs Vercel deployment | Import the repository as one Vercel project and verify its generated HTTPS URL |
+| HTTPS from a separate device | Verified for health and login | Both Vercel domains returned `/health` 200 and accepted the demo PM login over HTTPS |
 | Docker Compose images build | Verified locally | API and web production images built; API container returned `{"ok":true}` from `/health` |
 | Restart keeps database and uploads | Needs Vercel deployment | Redeploy and check Neon task data plus attachment download |
 | Backup and restore | Earlier local check only | Earlier `pg_dump`/`pg_restore` matched the original seed; Neon now also stores attachment bytes |

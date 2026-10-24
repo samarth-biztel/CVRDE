@@ -34,7 +34,7 @@ The PowerPoint was generated from screenshots of the **local production frontend
 ## Current external dependencies
 
 - No existing BiztelAI email implementation was present in the workspace. A configurable SMTP adapter is in place. Verify its integration or replace the adapter with the existing module before a customer demonstration.
-- Neon was connected locally for migration and seeding. A Vercel project and its environment variables still need to be configured; no public deployment has been made.
+- Neon was connected locally for migration and seeding. Both Vercel domains returned `/health` 200 and accepted the demo PM login over HTTPS on October 24, 2026. Review the Vercel project's database variable and function logs if a later deployment fails.
 - SMTP delivery remains optional and unverified.
 
 ## Suggested demo order
