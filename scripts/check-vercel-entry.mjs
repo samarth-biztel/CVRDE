@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { config } from 'dotenv';
 
+config({path:'.env'});
 process.env.NODE_ENV='test';
 process.env.VERCEL='1';
 const {default:handler}=await import('../api/index.ts');
