@@ -39,6 +39,12 @@ For existing installations with files in `backend/uploads`, run `npm run backfil
 
 `PUBLIC_DEMO_LOGIN=true` makes the shared demo password public. Use it only for a fictional demo database. The seeded accounts can edit that demo data. Do not reuse the demo password for another service.
 
+### Demo login on deployed URLs
+
+The demo account names are always visible in the login form. The shared password comes from the API. For both `https://cvrde-five.vercel.app` and `https://biztel-ai-cvrde.vercel.app`, open `/api/v1/auth/demo` after deployment. A JSON response with four accounts means the API is configured. A `404` with `Demo login unavailable` means `PUBLIC_DEMO_LOGIN=true` or `DEMO_PASSWORD` is missing. A function error or `500` can indicate that `DATABASE_URL` is missing or the API failed to initialize.
+
+The local root `.env` is ignored by Git and is not sent to Vercel. Add `DATABASE_URL`, `DEMO_PASSWORD`, and `PUBLIC_DEMO_LOGIN=true` in each Vercel project's **Settings → Environment Variables** for the environment that serves its URL. If both domains point to one project, configure that project once. Redeploy after changing variables, because older deployments keep their previous values.
+
 ## Optional email
 
 Notifications are logged even when email is not configured. To send email, additionally set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. To deliver demo notifications to controlled inboxes, set `DEMO_EMAIL_PM`, `DEMO_EMAIL_S1`, `DEMO_EMAIL_S2`, and `DEMO_EMAIL_REVIEWER` before seeding.

@@ -25,7 +25,7 @@ This checklist follows the revision 4 plan. The earlier workflow tests ran again
 | Docker Compose images build | Verified locally | API and web production images built; API container returned `{"ok":true}` from `/health` |
 | Restart keeps database and uploads | Needs Vercel deployment | Redeploy and check Neon task data plus attachment download |
 | Backup and restore | Earlier local check only | Earlier `pg_dump`/`pg_restore` matched the original seed; Neon now also stores attachment bytes |
-| PowerPoint screenshots match the running app | Needs refresh | The deck shows the earlier theme; [new browser captures](screenshots/) show the Vercel login and redesigned sidebar |
+| PowerPoint screenshots match the running app | Needs refresh | Current [browser captures](screenshots/) show the Swiss high contrast theme; the PowerPoint deck predates it |
 
 ## Local verification commands
 

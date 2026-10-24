@@ -5,7 +5,8 @@ try{
   const page=await browser.newPage({viewport:{width:1440,height:900},deviceScaleFactor:1});
   await page.goto('http://localhost:5173');
   await page.getByText('Explore as a demo user').waitFor();
-  await page.locator('.demo-logins code').evaluate(element=>{element.textContent='••••••••••••';});
+  await page.getByText('Shared demo password:').waitFor();
+  await page.locator('.demo-logins code').evaluate(element=>{element.textContent='************';});
   await page.screenshot({path:'docs/screenshots/09-vercel-login.png',fullPage:true});
   await page.getByRole('button',{name:/Project Manager pm.demo/}).click();
   await page.getByRole('button',{name:'Sign in'}).click();
@@ -13,7 +14,8 @@ try{
   await page.getByText('Final evidence package').waitFor();
   await page.getByText('Total tasks').waitFor();
   await page.getByText('17',{exact:true}).waitFor();
-  await page.waitForFunction(()=>document.querySelector('.stat:last-child strong')?.textContent!=='…');
+  await page.waitForFunction(()=>/^\d+$/.test(document.querySelector('.stat:last-child strong')?.textContent?.trim() || ''));
+  await page.locator('.bento-row').first().waitFor();
   await page.screenshot({path:'docs/screenshots/10-premium-overview.png',fullPage:true});
   const topBefore=await page.locator('.sidebar').evaluate(element=>element.getBoundingClientRect().top);
   await page.evaluate(()=>window.scrollTo(0,700));
@@ -25,5 +27,19 @@ try{
   const width=await page.locator('.sidebar').evaluate(element=>element.getBoundingClientRect().width);
   if(width>90)throw new Error(`Collapsed sidebar is too wide: ${width}px`);
   await page.screenshot({path:'docs/screenshots/11-collapsed-sidebar.png',fullPage:true});
-  console.log('Visual check passed: demo login, overview, collapsible sidebar.');
+  await page.getByRole('button',{name:'Expand sidebar'}).click();
+  await page.keyboard.press('Control+k');
+  const palette=page.getByTestId('command-palette');
+  await palette.waitFor();
+  await page.getByTestId('command-search-input').fill('Thermal analysis');
+  await palette.getByText('Thermal analysis report').waitFor();
+  await page.screenshot({path:'docs/screenshots/12-command-palette.png'});
+  await page.keyboard.press('Escape');
+  await page.getByTestId('toggle-theme').click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  await page.waitForTimeout(350);
+  await page.screenshot({path:'docs/screenshots/13-dark-overview.png'});
+  const missing=await page.locator('button,input,select,textarea,a[href]').evaluateAll(elements=>elements.filter(element=>!element.hasAttribute('data-testid')).length);
+  if(missing)throw new Error(`${missing} interactive controls lack data-testid`);
+  console.log('Visual check passed: login, fixed sidebar, search palette, dark mode, and test IDs.');
 }finally{await browser.close();}
