@@ -1,50 +1,133 @@
-# CVRDE Work Management Demo
+# CVRDE · Work Management Pilot
 
-Fictional pilot for project, task, review, pendency, and reporting workflows. The frontend is React/Vite, the API is Node.js/Express, and the database is Neon PostgreSQL.
+A role-based workspace for an **engine component development project**. Project managers plan the work, scientists carry it out, and reviewers approve decisions. Tasks, evidence, requests, and reports stay connected in one place.
 
-## Local start
+> **Demo project:** The accounts and project data are fictional. The shared password is intentionally public. Use a dedicated demo database.
 
-1. Copy `.env.example` to `.env` in the repository root. Set `DATABASE_URL` to your Neon connection string.
-2. From the repository root, run:
-
-```powershell
-npm install
-npm run migrate
-npm run seed
-```
-
-3. Start the frontend and backend together, with live reload. Press Ctrl+C to stop both:
-
-```powershell
-npm run dev
-```
-
-Open `http://localhost:5173`. Demo accounts are `pm.demo`, `scientist1.demo`, `scientist2.demo`, and `reviewer.demo`. Their public password is `CVRDE-Demo-2026!`, shown on the login page. Seeding resets only the named fictional demo project and updates the four demo users.
-
-## One Vercel project
-
-Import this repository as **one** Vercel project with the repository root as Root Directory. The root `vercel.json` builds `frontend/dist`, serves it as the site, and routes `/api/v1/*` to one Express function. No separate backend project, frontend project, or public API URL is needed.
-
-Set these environment variables in the Vercel project:
-
-| Variable | Value |
+| 🌐 Live frontend | 🔎 API check |
 |---|---|
-| `DATABASE_URL` | Neon PostgreSQL connection string |
+| [biztel-ai-cvrde.vercel.app](https://biztel-ai-cvrde.vercel.app/) | [Check `/health`](https://biztel-ai-cvrde.vercel.app/health) |
+| [cvrde-five.vercel.app](https://cvrde-five.vercel.app/) | [Check `/health`](https://cvrde-five.vercel.app/health) |
 
-Before the first deployment, run `npm run migrate` and `npm run seed` locally against that Neon database. After schema changes, run migrations again before deploying the new code. Seeding is a deliberate reset of the demo project, so run it only when you want the sample data refreshed. The API uses secure cookies automatically on Vercel.
+Both URLs serve the same app. A visible login page does not mean the API is ready; `/health` must respond successfully before sign in can work.
 
-For existing installations with files in `backend/uploads`, run `npm run backfill:files` after migration and before deployment. This copies old attachment bytes into PostgreSQL. New uploads are stored in PostgreSQL and work across Vercel function instances. Uploads are limited to 4 MB to fit Vercel's request size limit.
+## ✨ What the project does
 
-The shared demo password is deliberately public. Use this app only with the fictional demo database. The seeded accounts can edit that demo data. Do not reuse the demo password for another service.
+| Area | What users can do |
+|---|---|
+| Projects and tasks | Create projects, assign tasks and subtasks, set priorities and due dates, and track status. |
+| Collaboration | Comment, share work with groups, and see a task's activity history. |
+| Reviews | Submit results, return them for changes, accept them, and review reassignment or due-date requests. |
+| Pendencies | Raise blockers or clarifications, approve them when required, and resolve them. |
+| Evidence | Upload versioned project documents and task attachments; access follows project permissions. |
+| Oversight | Use role-based dashboards, pending-action queues, progress and overdue reports, and CSV exports. |
 
-### Demo login on deployed URLs
+The interface uses a fixed, collapsible sidebar, light and dark themes, and **Cmd/Ctrl + K** to find pages and tasks.
 
-The demo account names and password are built into the fictional pilot and remain visible even if the API is temporarily unavailable. For both `https://cvrde-five.vercel.app` and `https://biztel-ai-cvrde.vercel.app`, open `/health` after deployment. A `500` or `FUNCTION_INVOCATION_FAILED` means the API has failed to start; check the function logs and `DATABASE_URL`. The frontend can show the password, but sign in still requires a working API and a database seeded with the same password.
+### 👥 Demo roles
 
-The local root `.env` is ignored by Git and is not sent to Vercel. Add `DATABASE_URL` in each Vercel project's **Settings → Environment Variables** for the environment that serves its URL. If both domains point to one project, configure that project once. Redeploy after changing variables, because older deployments keep their previous values. Run `npm run seed` again to set the public password on existing demo accounts.
+| Role | Username | Main view |
+|---|---|---|
+| Project manager | `pm.demo` | Portfolio overview, assignments, approvals, reports |
+| Scientist | `scientist1.demo` | Own and shared tasks, results, requests |
+| Scientist | `scientist2.demo` | Own and shared tasks, results, requests |
+| Reviewer | `reviewer.demo` | Pending review decisions |
 
-## Optional email
+**Shared password:** `CVRDE-Demo-2026!`
 
-Notifications are logged even when email is not configured. To send email, additionally set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. To deliver demo notifications to controlled inboxes, set `DEMO_EMAIL_PM`, `DEMO_EMAIL_S1`, `DEMO_EMAIL_S2`, and `DEMO_EMAIL_REVIEWER` before seeding.
+Choose an account on the login page to fill both fields. The password is also shown there if the API is temporarily unavailable.
 
-The older Docker/Caddy setup remains under `deploy/` for self hosted use. Vercel deployment does not use Docker or Caddy.
+## 🧱 Tech stack
+
+| Layer | Technology |
+|---|---|
+| Web app | React 18, TypeScript, Vite 7, Tailwind CSS 4, TanStack Query |
+| Interface | shadcn-style Command, Radix Dialog, Lucide icons, Motion |
+| API | Node.js, Express 4, TypeScript, Zod |
+| Data | Neon PostgreSQL, `pg`, Kysely, SQL migrations |
+| Hosting | One Vercel project for the frontend and Express function |
+| Verification | Vitest, Supertest, Playwright, API smoke script |
+
+```mermaid
+flowchart LR
+    Browser[Browser] -->|Pages and assets| Vercel[Vercel frontend]
+    Browser -->|/api/v1/*| API[Express function]
+    API --> Neon[(Neon PostgreSQL)]
+    API -. optional notifications .-> SMTP[SMTP]
+```
+
+Attachments are stored in PostgreSQL so downloads work across Vercel function instances.
+
+## 🚀 Run locally
+
+**Prerequisites:** Node.js, npm, and a Neon PostgreSQL database. Run all commands from the repository root.
+
+1. Copy `.env.example` to `.env` in the **root** and set `DATABASE_URL` to your Neon connection string. The root `.env` is ignored by Git.
+2. Install dependencies and prepare the fictional demo database:
+
+   ```powershell
+   npm install
+   npm run migrate
+   npm run seed
+   ```
+
+3. Start the web app and API together:
+
+   ```powershell
+   npm run dev
+   ```
+
+Open **http://localhost:5173**. The API runs at **http://localhost:3001**. Press `Ctrl+C` to stop both.
+
+`npm run seed` resets the named fictional demo project and its four accounts. Run it again when you want a clean sample dataset or after changing the public password in [`backend/src/demo.ts`](backend/src/demo.ts).
+
+### Useful commands
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Run frontend and backend with live reload |
+| `npm run build` | Type-check and build both workspaces |
+| `npm run migrate` | Apply PostgreSQL schema changes |
+| `npm run seed` | Reset the fictional demo project and accounts |
+| `npm run smoke` | Check login, demo data, and an attachment download |
+| `npm run check:vercel-entry` | Check API rewrite paths against Express locally |
+| `npm test` | Run API workflow tests; reseed afterward |
+
+## ☁️ Deploy as one Vercel project
+
+1. Import this repository into **one** Vercel project. Keep the repository root as the Root Directory. [`vercel.json`](vercel.json) builds `frontend/dist` and routes `/api/v1/*` to [`api/index.ts`](api/index.ts).
+2. In **Project Settings → Environment Variables**, set `DATABASE_URL` for the environment serving your domain. No demo password environment variable is required.
+3. From a machine with access to that **same Neon database**, run `npm run migrate` and then `npm run seed` before the first sign in. Migrate again when the schema changes. Seeding resets the fictional project.
+4. Deploy or redeploy. Vercel applies changed environment variables to **new deployments**, not existing ones.
+5. Open `/health` on the deployed domain, then sign in using a demo account.
+
+The local `.env` is not uploaded to Vercel. If the two domains belong to different Vercel projects, configure each project. If they are aliases of one project, configure it once.
+
+### 🧭 Deployment troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Login page loads, but `/health` returns `503` mentioning `DATABASE_URL` | Add `DATABASE_URL` to the correct Vercel environment, then redeploy. |
+| `/health` returns `500` or `FUNCTION_INVOCATION_FAILED` | Inspect the Vercel function logs for an API initialization error. |
+| `/health` works, but sign in fails | Run migrations and reseed the same Neon database used by Vercel. Confirm the four demo users exist. |
+| Account names and password appear while API calls fail | Expected: login details are part of the frontend, but authentication still needs the API and database. |
+| Existing file downloads fail after moving from disk storage | Run `npm run backfill:files` after migration to copy older attachments into PostgreSQL. |
+
+New uploads are stored in PostgreSQL and limited to 4 MB for the Vercel request limit.
+
+## 🗂️ Repository guide
+
+| Path | Purpose |
+|---|---|
+| [`frontend/src/`](frontend/src/) | React screens, theme, command palette |
+| [`backend/src/`](backend/src/) | Express routes, permissions, seed data, file handling |
+| [`backend/migrations/`](backend/migrations/) | SQL schema migrations |
+| [`api/index.ts`](api/index.ts) | Vercel function entry |
+| [`docs/`](docs/) | [Acceptance checklist](docs/ACCEPTANCE.md), [handover](docs/HANDOVER.md), screenshots, and presentation |
+| [`deploy/`](deploy/) | Optional Docker/Caddy self-hosting setup |
+
+## ✉️ Optional email
+
+The app records notifications without SMTP. For delivery, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. To route demo messages to controlled inboxes, set `DEMO_EMAIL_PM`, `DEMO_EMAIL_S1`, `DEMO_EMAIL_S2`, and `DEMO_EMAIL_REVIEWER` before seeding.
+
+The Docker/Caddy files are for self-hosting; Vercel uses the root `vercel.json` instead.

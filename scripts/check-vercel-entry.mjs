@@ -18,7 +18,14 @@ try{
   const demo=await fetch(`${base}/demo`);
   assert.equal(demo.status,200);
   assert.equal((await demo.json()).accounts.length,4);
-  console.log('Vercel entry check passed: rewritten health and API paths reach Express.');
+  const savedDatabaseUrl=process.env.DATABASE_URL;
+  process.env.DATABASE_URL='';
+  try{
+    const unavailable=await fetch(`${base}/health`);
+    assert.equal(unavailable.status,503);
+    assert.match((await unavailable.json()).error,/DATABASE_URL/);
+  }finally{process.env.DATABASE_URL=savedDatabaseUrl;}
+  console.log('Vercel entry check passed: rewritten paths reach Express and missing database config returns 503.');
 }finally{
   await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
 }
