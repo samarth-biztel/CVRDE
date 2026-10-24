@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+uploads/
+backups/
+*.log
+.local-pg/
+.npm-cache/
+*.tsbuildinfo
+

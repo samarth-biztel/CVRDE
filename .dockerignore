@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/uploads
+.local-pg
+.npm-cache
+.env
+**/.env
+backups
+docs
+*.docx
+*.pptx
+*.log

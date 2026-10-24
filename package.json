@@ -1,0 +1,23 @@
+{
+  "name": "cvrde-demo",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend",
+    "migrate": "npm run migrate -w backend",
+    "seed": "npm run seed -w backend"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "pptxgenjs": "^4.0.0"
+  },
+  "overrides": {
+    "image-size": "^2.0.4"
+  }
+}
