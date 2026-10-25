@@ -34,7 +34,7 @@ The [PowerPoint](CVRDE_Demo_Presentation.pptx) was refreshed on 25 October 2026 
 ## Current external dependencies
 
 - No existing BiztelAI email implementation was present in the workspace. A configurable SMTP adapter is in place. Verify its integration or replace the adapter with the existing module before a customer demonstration.
-- Neon was connected locally for migration and seeding. On 25 October 2026 the canonical Vercel deployment passed all four demo logins, task and report reads, attachment access, and the 4 MB upload limit. The older Vercel domain redirected to the canonical one. Run `node scripts/verify-live.mjs` for a repeat check.
+- Neon was connected locally for migration and seeding. On 25 October 2026 the canonical Vercel deployment passed all four demo logins, task and report reads, attachment access, and the 4 MB upload limit. The older Vercel domain redirected to the canonical one. Commit `0c1bae7` deployed successfully, and seeded tasks and an attachment remained accessible afterward. Run `node scripts/verify-live.mjs` for a repeat check.
 - SMTP delivery remains optional and unverified.
 - Backup and isolated restore remain unverified against the current Neon PostgreSQL 18.6 instance: the installed `pg_dump` is version 17.10, and Docker Desktop was stopped during this check. Use PostgreSQL 18 client tools and a separate restore database.
 - A pooled Neon connection intermittently returned an empty `search_path` after a failed `pg_dump` attempt. The direct, unpooled Neon hostname worked for local screenshot capture and reseeding. Investigate the pooler session state before treating local pooled checks as reliable.

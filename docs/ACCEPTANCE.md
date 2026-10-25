@@ -32,7 +32,7 @@ Checked on **25 October 2026** against the revision 4 plan, the local production
 | Upload validation | Verified | Office file acceptance and mismatched PDF rejection pass locally; an oversized upload returns 413 live. |
 | Email delivery | Pending external configuration | Root `.env` has `DATABASE_URL` only. Configure SMTP and four controlled inboxes, run `npm run test-email -w backend`, then observe assignment, status, reassignment, and pendency messages. |
 | HTTPS from another device | Partly verified | HTTPS, health, and login pass from this machine. A second device/browser network check remains. |
-| Deployment persistence | Pending redeploy observation | Compare a task and attachment before and after a fresh Vercel deployment. Current live reads confirm data is present. |
+| Deployment persistence | Verified across one redeploy | Vercel marked commit `0c1bae7` successful. The same 17 task seed and a PostgreSQL stored attachment remained accessible through the canonical URL after deployment. |
 | Backup and isolated restore | Pending tooling | Neon reports PostgreSQL 18.6; installed `pg_dump` is 17.10 and refused the backup. Docker Desktop's daemon is stopped. Use a PostgreSQL 18 client and restore into a separate database; never restore over the live demo. |
 | Docker Compose images | Previously verified | Images and API health passed in the earlier local check. A repeat build was unavailable while Docker Desktop was stopped. The active deployment is Vercel. |
 
