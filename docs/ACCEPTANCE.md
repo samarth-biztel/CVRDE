@@ -1,40 +1,52 @@
-# Acceptance checklist
+# Acceptance and verification
 
-This checklist follows the revision 4 plan. The earlier workflow tests ran against temporary PostgreSQL 17. The Vercel adaptation was checked against Neon with the smoke script and browser build. Both public domains returned a healthy API response and accepted the demo PM login on October 24, 2026; broader deployed workflows remain to be checked.
+Checked on **25 October 2026** against the revision 4 plan, the local production build, the Neon demo database, and [the deployed Vercel project](https://biztel-ai-cvrde.vercel.app/). The fictional demo project was reseeded after workflow tests and screenshot capture. The user's later deployment choice is one Vercel project with Neon, rather than the plan's VM and Caddy setup. The later upload limit is 4 MB.
 
-| Check | Status | Evidence or next check |
+## Evidence
+
+| Check | Result | Evidence |
 |---|---|---|
-| Four fictional accounts log in with PM, member, and reviewer roles | Verified locally | API integration test and browser screenshots |
-| PM creates projects, tasks, and parent tasks | Implemented | Create forms and API; task creation exercised through seed and screens |
-| Members update status and comments | Implemented | API enforces owner and group permissions |
-| Live dashboard matches task data | Verified locally | Expanded seed produced 17 tasks; browser showed matching totals |
-| Due-date extension approval changes date; rejection does not | Partially verified | Approval and date change tested; rejection path implemented |
-| Reassignment reviewer approval and rejection | Partially verified | Approval and owner change tested; rejection path implemented |
-| Results submitted, returned, resubmitted, accepted | Verified locally | API test exercised versions 2 to 3 and state transitions |
-| Attachment versions download only for authorized users | Verified locally | Earlier API test checked group access and revocation; new smoke check downloaded a PostgreSQL stored document |
-| Task history and activity feed | Implemented | Browser screens and audit writes; event filter and CSV available |
-| Groups with membership and permissions | Verified locally | Access revoked immediately after removal in API test |
-| Pendency raised, approved, resolved | Partially verified | Seeded open pendency resolved in API test; approval path implemented |
-| Pending my action | Verified locally | PM and reviewer browser screenshots; queue disappearance tested |
-| Two filtered reports and CSV | Verified locally | Browser screenshot and API CSV check |
-| Project documents and version downloads | Verified locally | Two seeded document versions listed and accessible |
-| URL and request tampering rejected | Verified locally | Cross-user 403/404 checks in API test |
-| Upload type, size, and authorized download | Partially verified | Valid Office file and mismatched PDF rejected/accepted as expected; size limit is configured but not separately load-tested |
-| Assignment, reassignment, status, and pendency emails | Needs SMTP | Configure four test inboxes, run `npm run test-email -w backend`, then exercise each event |
-| HTTPS from a separate device | Verified for health and login | Both Vercel domains returned `/health` 200 and accepted the demo PM login over HTTPS |
-| Docker Compose images build | Verified locally | API and web production images built; API container returned `{"ok":true}` from `/health` |
-| Restart keeps database and uploads | Needs Vercel deployment | Redeploy and check Neon task data plus attachment download |
-| Backup and restore | Earlier local check only | Earlier `pg_dump`/`pg_restore` matched the original seed; Neon now also stores attachment bytes |
-| PowerPoint screenshots match the running app | Needs refresh | Current [browser captures](screenshots/) show the Swiss high contrast theme; the PowerPoint deck predates it |
+| Production build | Pass | `npm run build` compiled Express and Vite. Vite emitted dependency `use client` warnings, with a successful build. |
+| Vercel function entry | Pass | `npm run check:vercel-entry` checked rewrites and missing database handling. |
+| Database smoke | Pass | `npm run smoke` checked login, expanded seed, and PostgreSQL attachment download. |
+| API workflow integration | Pass with test setup | The existing Vitest workflow passed after a seed reset and a temporary 240 second timeout. Its checked paths include access control, extension approval, reassignment approval, result return and resubmission, attachment type, CSV, pendency resolution, and group revocation. The test file was restored afterward. The original 60 second timeout had failed on a slow run. |
+| Browser layout and interaction | Pass | `node scripts/visual-check.mjs` checked desktop and mobile login without scrolling, public demo fill during API outage, fixed/collapsible sidebar, command search, theme reveal origin, and test IDs. |
+| Live HTTPS and accounts | Pass | `node scripts/verify-live.mjs` checked `/health`, public demo credentials, all four logins, 17 tasks, dashboard, two CSV reports, project documents, task and attachment access, 4 MB upload rejection, and the legacy domain redirect. |
+| PowerPoint | Pass | [Eight slide deck](CVRDE_Demo_Presentation.pptx) regenerated from current browser captures. The PPTX ZIP is valid and Microsoft PowerPoint opened and rendered all eight slides. The reviewer slide shows a real pending reassignment. |
 
-## Local verification commands
+## Plan acceptance by workflow
+
+| Plan area | Result | Remaining verification |
+|---|---|---|
+| Four roles and seeded demo | Verified locally and live | Four HTTPS logins and the 17 task seed pass. |
+| PM creates projects, parent tasks, and tasks | Available; not independently exercised this round | Create a disposable project and tasks through the UI, then check member visibility. |
+| Member status updates and comments | Available; not independently exercised this round | Check an owner update and a group comment in a disposable task. |
+| Dashboard, overdue work, and reports | Verified locally and live | Seeded dashboard has 17 tasks and two overdue tasks; both CSV routes respond. |
+| Due date extensions | Partly verified | Approval and date change pass in the integration test; rejection still needs a separate end to end check. |
+| Reassignment | Partly verified | Reviewer approval and changed ownership pass; rejection still needs a separate end to end check. |
+| Results and versioned files | Verified locally; read access verified live | Return, resubmit, accept, versioning, download, and unauthorized rejection were checked. |
+| Groups, private tasks, and permissions | Verified locally and live | Group revocation passes locally; private task and attachment denial pass live. |
+| Pendency and pending action queues | Partly verified | Seeded pendency resolution and queue removal pass; new raise/approve/reject paths need separate checks. |
+| Task history and activity export | Partly verified | Events are written by the workflow test. History CSV and field diff completeness need a direct review. |
+| Project documents and PLM placeholder | Partly verified | Seeded document listing passes live; earlier local version download passed. PLM remains a placeholder by plan. |
+| Upload validation | Verified | Office file acceptance and mismatched PDF rejection pass locally; an oversized upload returns 413 live. |
+| Email delivery | Pending external configuration | Root `.env` has `DATABASE_URL` only. Configure SMTP and four controlled inboxes, run `npm run test-email -w backend`, then observe assignment, status, reassignment, and pendency messages. |
+| HTTPS from another device | Partly verified | HTTPS, health, and login pass from this machine. A second device/browser network check remains. |
+| Deployment persistence | Pending redeploy observation | Compare a task and attachment before and after a fresh Vercel deployment. Current live reads confirm data is present. |
+| Backup and isolated restore | Pending tooling | Neon reports PostgreSQL 18.6; installed `pg_dump` is 17.10 and refused the backup. Docker Desktop's daemon is stopped. Use a PostgreSQL 18 client and restore into a separate database; never restore over the live demo. |
+| Docker Compose images | Previously verified | Images and API health passed in the earlier local check. A repeat build was unavailable while Docker Desktop was stopped. The active deployment is Vercel. |
+
+## Reproduction
 
 ```sh
 npm run build
-npm run migrate
-npm run seed
 npm run smoke
 npm run check:vercel-entry
+npm test
+node scripts/verify-live.mjs
+node scripts/visual-check.mjs
+node scripts/capture-demo.mjs
+node scripts/create-deck.mjs
 ```
 
-The local test uses `DATABASE_URL` and the public demo password in the repository. The test changes demo data; run `npm run seed` again afterward.
+`npm test` and `capture-demo.mjs` change fictional demo records. Run `npm run seed` before and after them. Capture the deck only after the production build is served at `http://localhost:5173`. For local verification, use a direct Neon connection if a pooled session has an empty PostgreSQL `search_path`.

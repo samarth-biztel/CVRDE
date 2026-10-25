@@ -29,13 +29,15 @@ Neon holds the PostgreSQL database and attachment bytes. Back up the database. E
 
 Follow the [root README](../README.md) for local or Vercel startup. Run migrations before deploying new code. Run `npm run seed` when the fictional demo project should be reset. The seed also updates the four demo passwords and configured inbox addresses. Run `npm run smoke` to check login, sample data, and downloads.
 
-The PowerPoint was generated from screenshots of the **local production frontend build**, not a deployed cloud URL. Re-run `node scripts/capture-demo.mjs` and `node scripts/create-deck.mjs` after UI changes. The capture script creates a pending reassignment for the reviewer slide, so reset the demo afterward.
+The [PowerPoint](CVRDE_Demo_Presentation.pptx) was refreshed on 25 October 2026 from the **local production frontend build** and validated by opening and rendering all eight slides in Microsoft PowerPoint. Re-run `npm run seed` before `node scripts/capture-demo.mjs`, then run `node scripts/create-deck.mjs`, and reset the demo afterward. The capture creates a pending reassignment for the reviewer slide. A second capture without a reset can conflict with that pending request.
 
 ## Current external dependencies
 
 - No existing BiztelAI email implementation was present in the workspace. A configurable SMTP adapter is in place. Verify its integration or replace the adapter with the existing module before a customer demonstration.
-- Neon was connected locally for migration and seeding. Both Vercel domains returned `/health` 200 and accepted the demo PM login over HTTPS on October 24, 2026. Review the Vercel project's database variable and function logs if a later deployment fails.
+- Neon was connected locally for migration and seeding. On 25 October 2026 the canonical Vercel deployment passed all four demo logins, task and report reads, attachment access, and the 4 MB upload limit. The older Vercel domain redirected to the canonical one. Run `node scripts/verify-live.mjs` for a repeat check.
 - SMTP delivery remains optional and unverified.
+- Backup and isolated restore remain unverified against the current Neon PostgreSQL 18.6 instance: the installed `pg_dump` is version 17.10, and Docker Desktop was stopped during this check. Use PostgreSQL 18 client tools and a separate restore database.
+- A pooled Neon connection intermittently returned an empty `search_path` after a failed `pg_dump` attempt. The direct, unpooled Neon hostname worked for local screenshot capture and reseeding. Investigate the pooler session state before treating local pooled checks as reliable.
 
 ## Suggested demo order
 
