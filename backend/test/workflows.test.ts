@@ -32,6 +32,14 @@ describe('fictional demo workflows', () => {
     expect((await pm.post(`/api/v1/extension-requests/${extension.body.id}/decision`).send({approve:true})).body.status).toBe('APPROVED');
     expect((await pm.get(`/api/v1/projects/${project.id}/dashboard`)).body.overdue).toBe(1);
 
+    const memberRequest=await s1.post(`/api/v1/tasks/${material.id}/reassignments`).send({new_owner_id:loginIds['scientist2.demo'],reason:'Need another scientist for the November work window',work_from:'2026-11-01',work_until:'2026-11-15'});
+    expect(memberRequest.status).toBe(201);
+    expect(memberRequest.body.reviewer_id).toBe(loginIds['pm.demo']);
+    expect(memberRequest.body.work_from).toBe('2026-11-01');
+    expect((await s2.post(`/api/v1/reassignments/${memberRequest.body.id}/decision`).send({approve:true})).status).toBe(403);
+    expect((await pm.post(`/api/v1/reassignments/${memberRequest.body.id}/decision`).send({approve:false,comment:'Keep current owner'})).body.status).toBe('REJECTED');
+    expect((await s1.get(`/api/v1/tasks/${material.id}`)).status).toBe(200);
+
     const reassignment=await pm.post(`/api/v1/tasks/${fatigue.id}/reassignments`).send({new_owner_id:loginIds['scientist2.demo'],reviewer_id:loginIds['reviewer.demo'],reason:'Scientist one unavailable'});
     expect(reassignment.status).toBe(201);
     expect((await reviewer.post(`/api/v1/reassignments/${reassignment.body.id}/decision`).send({approve:true})).body.status).toBe('APPROVED');
@@ -68,5 +76,5 @@ describe('fictional demo workflows', () => {
     expect((await s1.get(`/api/v1/tasks/${thermal.id}`)).status).toBe(404);
     expect((await s1.get(`/api/v1/attachments/${files.body[0].id}/download`)).status).toBe(404);
     const docs=await s1.get(`/api/v1/projects/${project.id}/documents`);expect(docs.status).toBe(200);expect(docs.body.length).toBe(2);
-  },60000);
+  },180000);
 });

@@ -72,7 +72,7 @@ try{
       [sensor,ids['scientist2.demo'],'Two thermocouples need a repeat check before sign-off.'],
       [fixture,ids['pm.demo'],'Please align the release drawing with the latest test rig revision.']
     ] as [number,number,string][])await query(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3)',[taskId,author,body]);
-    await query(tx,'INSERT INTO reassignments(task_id,original_owner_id,new_owner_id,reason,requested_by,reviewer_id) VALUES($1,$2,$3,$4,$5,$6)',[fixture,ids['scientist2.demo'],ids['scientist1.demo'],'Balance drawing review workload',ids['pm.demo'],ids['reviewer.demo']]);
+    await query(tx,'INSERT INTO reassignments(task_id,original_owner_id,new_owner_id,reason,requested_by,reviewer_id,work_from,work_until) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[fixture,ids['scientist2.demo'],ids['scientist1.demo'],'Balance drawing review workload',ids['pm.demo'],ids['reviewer.demo'],day(1),day(14)]);
     await query(tx,'INSERT INTO due_date_extensions(task_id,requested_by,old_due_date,new_due_date,reason) VALUES($1,$2,$3,$4,$5)',[sensor,ids['scientist2.demo'],day(-2),day(5),'Replacement sensor arriving this week']);
     const p2=await one<{id:number}>(tx,"INSERT INTO pendencies(raised_by,blocked_task_id,responsible_user_id,type,description,needs_approval,approver_id,status) VALUES($1,$2,$3,'ACTION',$4,true,$5,'AWAITING_APPROVAL') RETURNING id",[ids['scientist1.demo'],vibration,ids['scientist2.demo'],'Confirm fixture availability for vibration setup',ids['pm.demo']]);
     await query(tx,'INSERT INTO pendency_dependencies(pendency_id,depends_on_task_id) VALUES($1,$2)',[p2!.id,fixture]);

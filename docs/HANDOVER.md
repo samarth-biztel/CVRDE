@@ -15,7 +15,7 @@
 | `backend/src/files.ts` | Upload, version listing, authorized download |
 | `backend/migrations/` | PostgreSQL schema |
 | `backend/src/seed.ts` | Fictional reset data and sample files |
-| `frontend/src/App.tsx` | PM, member, and reviewer screens |
+| `frontend/src/App.tsx` and `frontend/src/Workspace.tsx` | Role navigation, task tables, Settings, task detail, and Review screens |
 | `api/index.ts` and `vercel.json` | Single Vercel project entry and routing |
 | `deploy/` | Compose, HTTPS proxy, backup and restore instructions |
 
@@ -29,7 +29,9 @@ Neon holds the PostgreSQL database and attachment bytes. Back up the database. E
 
 Follow the [root README](../README.md) for local or Vercel startup. Run migrations before deploying new code. Run `npm run seed` when the fictional demo project should be reset. The seed also updates the four demo passwords and configured inbox addresses. Run `npm run smoke` to check login, sample data, and downloads.
 
-The [PowerPoint](CVRDE_Demo_Presentation.pptx) was refreshed on 25 October 2026 from the **local production frontend build** and validated by opening and rendering all eight slides in Microsoft PowerPoint. Re-run `npm run seed` before `node scripts/capture-demo.mjs`, then run `node scripts/create-deck.mjs`, and reset the demo afterward. The capture creates a pending reassignment for the reviewer slide. A second capture without a reset can conflict with that pending request.
+The [PowerPoint](CVRDE_Demo_Presentation.pptx) uses screenshots from the **local production frontend build**. Re-run `npm run seed` before `node scripts/capture-demo.mjs`, then run `node scripts/create-deck.mjs`, and reset the demo afterward. The capture creates a pending reassignment for the reviewer slide. A second capture without a reset can conflict with that pending request.
+
+The revised workflow is covered by `node scripts/check-workspace-ui.mjs`: it exercises Excel and manual group creation, status and result submission, prerequisite approval, employee reassignment approval, role navigation, and Review filters. It changes fictional demo data, so seed again afterward. Reassignment work dates are recorded for review; approval changes ownership without an automatic end-date reversal.
 
 ## Current external dependencies
 
@@ -42,8 +44,8 @@ The [PowerPoint](CVRDE_Demo_Presentation.pptx) was refreshed on 25 October 2026 
 ## Suggested demo order
 
 1. Reset demo data and confirm the overview has seventeen varied tasks.
-2. As PM, open project groups and a submitted result; return or accept it.
-3. As Scientist One, show own and shared tasks, then request a due-date extension or raise a pendency.
-4. As PM, request reassignment of Fatigue test setup to Scientist Two.
-5. As reviewer, approve the reassignment from Pending my action.
+2. As PM, open **Settings** to show manual and Excel group management, then open a submitted result.
+3. As Scientist One, show the task table with due dates and linked tasks, then add a prerequisite from task detail.
+4. As PM, approve that prerequisite in **Review**; Scientist One can also request a new owner and work window for PM approval.
+5. As PM, request a reassignment for Reviewer approval; Reviewer decides it in **Review**.
 6. Return to PM dashboard and export both reports.

@@ -182,21 +182,29 @@ api.post('/results/:resultId/review',handler(async(req,res)=>{
 }));
 
 api.post('/tasks/:taskId/reassignments',handler(async(req,res)=>{
-  const u=currentUser(res),task=await taskById(id(req.params.taskId));await projectManager(u,task.project_id);
-  const d=parse(z.object({new_owner_id:z.number().int().positive(),reviewer_id:z.number().int().positive(),reason:nonempty}),req.body);
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));
+  const pm=u.id===task.manager_id&&u.role==='PM',owner=u.id===task.owner_id&&u.role==='MEMBER';
+  if(!pm&&!owner)throw new HttpError(403,'Manager or current owner only');
+  const d=parse(z.object({new_owner_id:z.number().int().positive(),reviewer_id:z.number().int().positive().optional(),reason:nonempty,work_from:z.string().date().optional(),work_until:z.string().date().optional()}),req.body);
   if(d.new_owner_id===task.owner_id)throw new HttpError(400,'Choose another owner');
+  if(owner&&(!d.work_from||!d.work_until))throw new HttpError(400,'Work period required');
+  if(Boolean(d.work_from)!==Boolean(d.work_until)||d.work_from&&d.work_until&&d.work_until<d.work_from)throw new HttpError(400,'Invalid work period');
+  if(await one(db,"SELECT 1 FROM reassignments WHERE task_id=$1 AND status='PENDING'",[task.id]))throw new HttpError(409,'A reassignment is already awaiting approval');
   if(!await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[task.project_id,d.new_owner_id]))throw new HttpError(400,'New owner must belong to project');
-  if(!await one(db,"SELECT 1 FROM users WHERE id=$1 AND role='REVIEWER' AND active",[d.reviewer_id]))throw new HttpError(400,'Reviewer required');
-  const row=await db.transaction().execute(async tx=>{const r=await one(tx,'INSERT INTO reassignments(task_id,original_owner_id,new_owner_id,reason,requested_by,reviewer_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[task.id,task.owner_id,d.new_owner_id,d.reason,u.id,d.reviewer_id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_REQUESTED',u.id,{original_owner_id:task.owner_id,new_owner_id:d.new_owner_id,reviewer_id:d.reviewer_id,reason:d.reason});return r;});
-  await notify('REASSIGNMENT_REVIEW',d.reviewer_id,task.id,`Review reassignment: ${task.title}`,d.reason);send(res,row,201);
+  const approver=owner?task.manager_id:d.reviewer_id;
+  if(pm&&(!approver||!await one(db,"SELECT 1 FROM users WHERE id=$1 AND role='REVIEWER' AND active",[approver])))throw new HttpError(400,'Reviewer required');
+  const row=await db.transaction().execute(async tx=>{const r=await one(tx,'INSERT INTO reassignments(task_id,original_owner_id,new_owner_id,reason,requested_by,reviewer_id,work_from,work_until) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[task.id,task.owner_id,d.new_owner_id,d.reason,u.id,approver,d.work_from,d.work_until]);await history(tx,task.project_id,task.id,'REASSIGNMENT_REQUESTED',u.id,{original_owner_id:task.owner_id,new_owner_id:d.new_owner_id,approver_id:approver,work_from:d.work_from,work_until:d.work_until,reason:d.reason});return r;});
+  await notify('REASSIGNMENT_REVIEW',approver!,task.id,`Review reassignment: ${task.title}`,d.work_from?`${d.reason} (${d.work_from} to ${d.work_until})`:d.reason);send(res,row,201);
 }));
 api.post('/reassignments/:requestId/decision',handler(async(req,res)=>{
   const u=currentUser(res),rid=id(req.params.requestId),d=parse(z.object({approve:z.boolean(),comment:z.string().max(2000).default('')}),req.body);
-  const r=await one<{id:number;task_id:number;original_owner_id:number;new_owner_id:number;reviewer_id:number;status:string}>(db,'SELECT * FROM reassignments WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Request not found');
-  if(u.id!==r.reviewer_id || u.role!=='REVIEWER')throw new HttpError(403,'Reviewer only');if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
-  const task=await taskById(r.task_id),status=d.approve?'APPROVED':'REJECTED';
+  const r=await one<{id:number;task_id:number;original_owner_id:number;new_owner_id:number;reviewer_id:number;requested_by:number;status:string;work_from:string|null;work_until:string|null}>(db,'SELECT * FROM reassignments WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Request not found');
+  const task=await taskById(r.task_id);
+  if(u.id!==r.reviewer_id || (u.role!=='REVIEWER'&&u.id!==task.manager_id))throw new HttpError(403,'Approver only');if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
+  if(task.owner_id!==r.original_owner_id)throw new HttpError(409,'Task owner changed since request');
+  const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE reassignments SET status=$1,decided_at=now() WHERE id=$2',[status,rid]);if(d.approve)await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[r.new_owner_id,task.id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_DECIDED',u.id,{status,old:r.original_owner_id,new:d.approve?r.new_owner_id:r.original_owner_id,comment:d.comment});});
-  for(const target of [r.original_owner_id,r.new_owner_id,task.manager_id])await notify('REASSIGNMENT_DECIDED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});
+  for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REASSIGNMENT_DECIDED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status,work_from:r.work_from,work_until:r.work_until});
 }));
 api.get('/tasks/:taskId/reassignments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM reassignments WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
 
@@ -230,7 +238,7 @@ api.get('/me/pending-actions',handler(async(_req,res)=>{
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
     query(db,`SELECT r.id,t.id AS task_id,t.title,'RESULT_REVIEW' AS kind FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id WHERE p.manager_id=$1 AND r.review_status='PENDING'`,[u.id]),
     query(db,`SELECT e.id,t.id AS task_id,t.title,'EXTENSION' AS kind FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
-    query(db,`SELECT r.id,t.id AS task_id,t.title,'REASSIGNMENT' AS kind FROM reassignments r JOIN tasks t ON t.id=r.task_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.title,'REASSIGNMENT' AS kind,r.reason,r.work_from,r.work_until FROM reassignments r JOIN tasks t ON t.id=r.task_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.title,'PENDENCY_APPROVAL' AS kind FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.title,'PENDENCY_RESOLVE' AS kind FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id WHERE p.responsible_user_id=$1 AND p.status='OPEN'`,[u.id])
   ]);send(res,[...results,...extensions,...reassignments,...approvals,...resolutions]);

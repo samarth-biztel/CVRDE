@@ -1,5 +1,21 @@
 # Acceptance and verification
 
+## 27 October 2026 update
+
+The revised task and review workflow was checked against the local production frontend and Neon demo database. The demo was reset after browser testing and presentation capture.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Production build | Pass | `npm run build` compiled the Express API and Vite frontend. |
+| Database migration | Pass | Migration `003_reassignment_work_window.sql` applied to Neon; request dates are stored as a work window and do not automatically revert ownership. |
+| API workflow | Pass | `npm test` exercised employee-to-PM reassignment request, approval access control, rejection, and the existing task workflow. |
+| Browser workflow | Pass | `node scripts/check-workspace-ui.mjs` exercised role tables, due dates, Settings, manual and Excel group creation against existing usernames, Review filters, prerequisite approval, reassignment approval, status changes, and result description submission. |
+| Database and Vercel entry | Pass | `npm run smoke` checked demo login/data/files; `npm run check:vercel-entry` checked Express routing and missing database handling. |
+| Browser layout | Pass | `node scripts/visual-check.mjs` checked no-scroll login, fixed sidebar, command search, theme transition, and test IDs. |
+| Presentation | Pass | The eight-slide deck was regenerated from fresh browser screenshots and opened and rendered in Microsoft PowerPoint. |
+
+Live deployment verification for this revision should be run after the commit reaches Vercel. The previous verification record follows.
+
 Checked on **25 October 2026** against the revision 4 plan, the local production build, the Neon demo database, and [the deployed Vercel project](https://biztel-ai-cvrde.vercel.app/). The fictional demo project was reseeded after workflow tests and screenshot capture. The user's later deployment choice is one Vercel project with Neon, rather than the plan's VM and Caddy setup. The later upload limit is 4 MB.
 
 ## Evidence

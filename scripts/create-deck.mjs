@@ -40,30 +40,30 @@ slide('Project overview','Project manager','02-pm-overview',[
   'Seventeen seeded tasks cover varied owners and deadlines.',
   'Decision and overdue lists lead to the underlying work.'
 ]);
-slide('Projects and controlled sharing','Project manager','03-projects-and-groups',[
-  'Create projects, parent tasks, and assigned work.',
-  'Groups control member access and task sharing.',
-  'Permissions apply to the API as well as the interface.'
+slide('Project setup and groups','Project manager settings','03-projects-and-groups',[
+  'Create projects and add existing team members.',
+  'Add groups manually or import an Excel sheet.',
+  'Group permissions control shared work.'
 ]);
 slide('Scientist workspace','Scientist one','07-member-tasks',[
-  'Members see owned tasks and work shared through groups.',
-  'They update progress and submit results.',
-  'Private work stays outside other members’ views.'
+  'The table shows task, due date, and linked work.',
+  'Members see owned and permitted shared tasks.',
+  'Status and results are updated inside task detail.'
 ]);
 slide('Results and evidence','Task detail','04-task-detail',[
-  'Submitted results can be returned, revised, and accepted.',
-  'Document versions remain available to authorized users.',
-  'Task history records the sequence of changes.'
+  'Status changes through a dropdown.',
+  'A single description submits each result version.',
+  'Prerequisites and reassignment live in task detail.'
 ]);
-slide('Pending decisions','Project manager','05-pending-actions',[
-  'Result reviews and due date requests appear in one queue.',
-  'Approval or rejection updates the task and history.',
-  'Completed decisions leave the queue.'
+slide('Review and approvals','Project manager','05-pending-actions',[
+  'Filter decisions by request type and task.',
+  'Managers decide employee reassignment requests.',
+  'Results, extensions, and prerequisites share one queue.'
 ]);
 slide('Independent reviewer','Reviewer','08-reviewer-actions',[
-  'A reassignment request is routed to the reviewer.',
-  'Approval changes ownership; rejection retains it.',
-  'The action is recorded for audit and reporting.'
+  'A PM reassignment request reaches the reviewer.',
+  'The reason and work window are visible before a decision.',
+  'Approval changes ownership; rejection retains it.'
 ]);
 slide('Reports and pilot readiness','Project manager','06-reports',[
   'Overdue Tasks and Project Progress offer CSV export.',
