@@ -13,8 +13,9 @@ The revised task and review workflow was checked against the local production fr
 | Database and Vercel entry | Pass | `npm run smoke` checked demo login/data/files; `npm run check:vercel-entry` checked Express routing and missing database handling. |
 | Browser layout | Pass | `node scripts/visual-check.mjs` checked no-scroll login, fixed sidebar, command search, theme transition, and test IDs. |
 | Presentation | Pass | The eight-slide deck was regenerated from fresh browser screenshots and opened and rendered in Microsoft PowerPoint. |
+| Live deployment | Pass | Vercel reported commit `de5bb6d` deployed successfully. `node scripts/verify-live.mjs` passed HTTPS, four logins, 17 tasks, dashboard, documents, reports, attachment access, upload limit, and legacy redirect. |
 
-Live deployment verification for this revision should be run after the commit reaches Vercel. The previous verification record follows.
+The previous verification record follows.
 
 Checked on **25 October 2026** against the revision 4 plan, the local production build, the Neon demo database, and [the deployed Vercel project](https://biztel-ai-cvrde.vercel.app/). The fictional demo project was reseeded after workflow tests and screenshot capture. The user's later deployment choice is one Vercel project with Neon, rather than the plan's VM and Caddy setup. The later upload limit is 4 MB.
 
