@@ -19,7 +19,7 @@ Both URLs serve the same app. A visible login page does not mean the API is read
 | Collaboration | Comment, share work with groups, and see a task's activity history. |
 | Reviews | Submit results, return them for changes, accept them, and review reassignment or due-date requests. |
 | Prerequisites | Link blocked work inside task detail, request approval, and resolve it from Review. |
-| Evidence | Upload versioned project documents and task attachments; access follows project permissions. |
+| Evidence | Upload versioned project documents and task attachments; a green tick and filename confirm each successful upload. Access follows project permissions. |
 | Oversight | Use role-based dashboards, pending-action queues, progress and overdue reports, and CSV exports. |
 
 The interface uses a fixed, collapsible sidebar, light and dark themes, and **Cmd/Ctrl + K** to find pages and tasks.
