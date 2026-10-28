@@ -18,6 +18,10 @@ describe('fictional demo workflows', () => {
     const find=(title:string)=>tasks.body.find((t:{title:string})=>t.title===title);
     const thermal=find('Thermal analysis report'),material=find('Material sample testing'),fatigue=find('Fatigue test setup'),drawing=find('Component drawing review');
     expect(thermal && material && fatigue && drawing).toBeTruthy();
+    const lastTaskDate=new Date(Date.parse(project.target_date)-86400000).toISOString().slice(0,10);
+    expect((await pm.post(`/api/v1/projects/${project.id}/tasks`).send({title:'Invalid deadline',owner_id:loginIds['scientist1.demo'],due_date:project.target_date})).status).toBe(400);
+    expect((await pm.patch(`/api/v1/tasks/${fatigue.id}`).send({due_date:project.target_date})).status).toBe(400);
+    expect((await s1.post(`/api/v1/tasks/${fatigue.id}/extension-requests`).send({new_due_date:project.target_date,reason:'Past project deadline'})).status).toBe(400);
     expect((await s1.get(`/api/v1/tasks/${thermal.id}`)).status).toBe(200);
     expect((await s1.get(`/api/v1/tasks/${drawing.id}`)).status).toBe(404);
     expect((await s2.get(`/api/v1/tasks/${material.id}`)).status).toBe(200);
@@ -26,7 +30,7 @@ describe('fictional demo workflows', () => {
     const dashboard=await pm.get(`/api/v1/projects/${project.id}/dashboard`);
     expect(dashboard.body.total).toBe(17);expect(dashboard.body.overdue).toBe(2);
 
-    const extension=await s1.post(`/api/v1/tasks/${material.id}/extension-requests`).send({new_due_date:'2099-01-01',reason:'Additional samples required'});
+    const extension=await s1.post(`/api/v1/tasks/${material.id}/extension-requests`).send({new_due_date:lastTaskDate,reason:'Additional samples required'});
     expect(extension.status).toBe(201);
     expect((await s2.post(`/api/v1/extension-requests/${extension.body.id}/decision`).send({approve:true})).status).toBe(404);
     expect((await pm.post(`/api/v1/extension-requests/${extension.body.id}/decision`).send({approve:true})).body.status).toBe('APPROVED');

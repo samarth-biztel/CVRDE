@@ -22,8 +22,22 @@ async function login(page,username){
 try{
   const pm=await browser.newPage({viewport:{width:1440,height:900}});
   await login(pm,'pm.demo');
+  await pm.getByTestId('nav-projects').click();
+  await pm.getByRole('button',{name:'New project'}).click();
+  await pm.getByRole('heading',{name:'New project'}).waitFor();
+  if(!await pm.getByLabel('Project deadline').evaluate(el=>el.required))throw new Error('Project deadline is optional');
+  await pm.getByRole('button',{name:'Cancel'}).click();
+  await pm.getByTestId('nav-tasks').click();
+  await pm.getByRole('button',{name:'New task'}).click();
+  await pm.getByRole('heading',{name:'New task'}).waitFor();
+  const maxDate=await pm.getByLabel('Due date',{exact:true}).getAttribute('max');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(maxDate||''))throw new Error('Task due date is not bounded by project deadline');
+  await pm.getByRole('button',{name:'Cancel'}).click();
+  await pm.getByRole('row',{name:/Fatigue test setup/}).click();
+  await pm.getByRole('button',{name:'Edit task'}).click();
+  if(await pm.getByLabel('Due date',{exact:true}).getAttribute('max')!==maxDate)throw new Error('Edited task due date exceeds project deadline');
+  await pm.getByRole('button',{name:'Cancel edit'}).click();
   await pm.getByTestId('nav-settings').click();
-  await pm.getByRole('heading',{name:'Create project'}).waitFor();
   await pm.getByRole('heading',{name:'Add team member'}).waitFor();
   await pm.getByRole('heading',{name:'Import team and groups from Excel'}).waitFor();
   await pm.getByRole('heading',{name:'Groups',exact:true}).waitFor();
@@ -37,7 +51,7 @@ try{
   await pm.getByTestId('nav-projects').click();
   await pm.getByRole('columnheader',{name:'Due date'}).waitFor();
   await pm.getByRole('columnheader',{name:'Linked to'}).waitFor();
-  if(await pm.getByRole('heading',{name:'Create project'}).count())throw new Error('Project creation still appears inside Projects');
+  await pm.getByRole('button',{name:'New project'}).waitFor();
   await pm.getByTestId('nav-pending').click();
   await pm.getByLabel('Review type').waitFor();
   await pm.getByLabel('Filter reviews by task').waitFor();

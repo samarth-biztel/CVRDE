@@ -13,6 +13,11 @@ const id = (value:unknown) => uid(value);
 const send = (res:import('express').Response,value:unknown,status=200) => res.status(status).json(value);
 const nonempty = z.string().trim().min(1).max(5000);
 const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
+async function checkProjectDeadline(projectId:number,dueDate:string|null|undefined){
+  if(!dueDate)return;
+  const project=await one<{target_date:string|null}>(db,'SELECT target_date FROM projects WHERE id=$1',[projectId]);
+  if(project?.target_date&&dueDate>=project.target_date.slice(0,10))throw new HttpError(400,'Task due date must be before the project deadline');
+}
 
 const attempts = new Map<string,{count:number;until:number}>();
 api.get('/auth/demo',(_req,res)=>{
@@ -46,8 +51,8 @@ api.get('/projects',handler(async(_req,res)=>{
 }));
 api.post('/projects',handler(async(req,res)=>{
   const u=currentUser(res);role(u,['PM']);
-  const data=parse(z.object({name:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),target_date:z.string().date().nullable().optional()}),req.body);
-  const p=await db.transaction().execute(async tx=>{const project=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING *',[data.name,data.description,data.target_date || null,u.id]);await history(tx,project!.id,null,'PROJECT_CREATED',u.id,{name:data.name});return project;});
+  const data=parse(z.object({name:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),target_date:z.string().date()}),req.body);
+  const p=await db.transaction().execute(async tx=>{const project=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING *',[data.name,data.description,data.target_date,u.id]);await history(tx,project!.id,null,'PROJECT_CREATED',u.id,{name:data.name});return project;});
   send(res,p,201);
 }));
 api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await getProject(pid));}));
@@ -71,6 +76,7 @@ api.get('/tasks/mine',handler(async(_req,res)=>{
 api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
   const d=parse(taskInput,req.body);
+  await checkProjectDeadline(pid,d.due_date);
   const member=await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
   let parent:Task|undefined;
   if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid)throw new HttpError(400,'Parent must belong to project');}
@@ -89,6 +95,7 @@ api.patch('/tasks/:taskId',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'EDIT');
   const d=parse(z.object({title:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),priority:z.enum(['LOW','MEDIUM','HIGH']).optional(),due_date:z.string().date().nullable().optional(),plm_ref:z.string().max(100).nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional()}).strict(),req.body);
   if(!Object.keys(d).length)throw new HttpError(400,'No changes');
+  await checkProjectDeadline(task.project_id,d.due_date);
   if(d.parent_task_id){const parent=await taskById(d.parent_task_id);if(parent.project_id!==task.project_id || parent.id===task.id)throw new HttpError(400,'Invalid parent');}
   const allowed=['title','description','priority','due_date','plm_ref','parent_task_id'] as const;
   const updates=Object.entries(d).filter(([k])=>allowed.includes(k as typeof allowed[number]));
@@ -149,6 +156,7 @@ api.post('/tasks/:taskId/extension-requests',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(u.id!==task.owner_id)throw new HttpError(403,'Owner only');
   const d=parse(z.object({new_due_date:z.string().date(),reason:nonempty}),req.body);
   if(task.due_date && d.new_due_date<=task.due_date.slice(0,10))throw new HttpError(400,'New date must be later');
+  await checkProjectDeadline(task.project_id,d.new_due_date);
   const row=await db.transaction().execute(async tx=>{const r=await one(tx,"INSERT INTO due_date_extensions(task_id,requested_by,old_due_date,new_due_date,reason) VALUES($1,$2,$3,$4,$5) RETURNING *",[task.id,u.id,task.due_date,d.new_due_date,d.reason]);await history(tx,task.project_id,task.id,'EXTENSION_REQUESTED',u.id,{new_due_date:d.new_due_date,reason:d.reason});return r;});
   await notify('EXTENSION_REQUESTED',task.manager_id,task.id,`Extension requested: ${task.title}`,d.reason);send(res,row,201);
 }));
@@ -156,6 +164,7 @@ api.post('/extension-requests/:requestId/decision',handler(async(req,res)=>{
   const u=currentUser(res),requestId=id(req.params.requestId),d=parse(z.object({approve:z.boolean(),comment:z.string().max(2000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;requested_by:number;new_due_date:string;status:string}>(db,'SELECT * FROM due_date_extensions WHERE id=$1',[requestId]);if(!r)throw new HttpError(404,'Request not found');
   const task=await taskById(r.task_id);await projectManager(u,task.project_id);if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
+  if(d.approve)await checkProjectDeadline(task.project_id,r.new_due_date);
   const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE due_date_extensions SET status=$1,decided_by=$2,decided_at=now() WHERE id=$3',[status,u.id,r.id]);if(d.approve)await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[r.new_due_date,task.id]);await history(tx,task.project_id,task.id,'EXTENSION_DECIDED',u.id,{status,new_due_date:r.new_due_date,comment:d.comment});});
   await notify('EXTENSION_DECIDED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});

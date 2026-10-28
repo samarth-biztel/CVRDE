@@ -60,8 +60,8 @@ flowchart LR
 
 | Step | Where | What to do |
 |---|---|---|
-| 1. Set up work | **Settings** | Create a project. Add existing user accounts to its team and groups manually, or import an Excel sheet with `username` and optional `group` columns. Configure group permissions here. |
-| 2. Create tasks | **Projects** | Choose owner, due date, priority, optional **Linked to** task, description, and sharing group. The task starts in **New**. |
+| 1. Set up work | **Projects → New project**, then **Settings** | Create a project with a deadline. In Settings, add existing user accounts to its team and groups manually, or import an Excel sheet with `username` and optional `group` columns. Configure group permissions there. |
+| 2. Create tasks | **Tasks → New task** | Choose owner, due date before the project deadline, priority, optional **Linked to** task, description, and sharing group. The task starts in **New**. Open a task and select **Edit task** to change its details. |
 | 3. Monitor | **Overview**, **Tasks** | Follow totals, overdue work, and the task table. Open a task for progress, files, requests, comments, and history. |
 | 4. Review requests | **Review** | Filter by request type or task. Approve or reject employee reassignment, due date extension, and prerequisite requests. Return or accept results. |
 | 5. Request a reviewer decision | **Task detail → Reassignment** | Select a new owner, Reviewer, work window, and reason. Reviewer approval changes ownership. |
@@ -102,8 +102,8 @@ Run `npm run seed` for a fresh fictional demonstration. Each step changes shared
 
 | # | Account | Try this |
 |---|---|---|
-| 1 | **PM** | In **Settings**, add a group manually or import an Excel sheet with an existing username and group name. |
-| 2 | **PM** | In **Projects**, create a task with a due date and optional **Linked to** task. |
+| 1 | **PM** | In **Projects**, create a project with a deadline. In **Settings**, add a group manually or import an Excel sheet with an existing username and group name. |
+| 2 | **PM** | In **Tasks**, create a task with a due date before the project deadline and an optional **Linked to** task. |
 | 3 | **Scientist One** | In **Tasks**, open it, select **In progress**, comment, and upload evidence. |
 | 4 | **Scientist One → PM** | Add a prerequisite within task detail; approve it in **Review**. |
 | 5 | **Scientist Two** | Resolve the approved prerequisite from **Review**. |

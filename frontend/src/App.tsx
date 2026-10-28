@@ -61,7 +61,7 @@ function App(){
     {message&&<div className="notice success">{message}</div>}{error&&<div className="notice error">{error}</div>}
     {screen==='overview'&&<Overview user={user} projectId={projectId} onProject={setProjectId} onTask={showTask}/>}
     {screen==='projects'&&<WorkspaceProjects user={user} projectId={projectId} onProject={setProjectId} onTask={showTask} run={run}/>}
-    {screen==='tasks'&&<WorkspaceTasks user={user} projectId={projectId} onProject={setProjectId} onTask={showTask}/>}
+    {screen==='tasks'&&<WorkspaceTasks user={user} projectId={projectId} onProject={setProjectId} onTask={showTask} run={run}/>}
     {screen==='task'&&taskId&&<WorkspaceTaskDetail user={user} taskId={taskId} onBack={()=>go('tasks')} onTask={showTask} run={run}/>}
     {screen==='pending'&&<WorkspacePending onTask={showTask} run={run}/>}
     {screen==='reports'&&user.role==='PM'&&<Reports user={user} projectId={projectId} onProject={setProjectId}/>}
