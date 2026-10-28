@@ -17,6 +17,7 @@ try{
   const lastTaskDate=new Date(Date.parse(project.target_date)-86400000).toISOString().slice(0,10);
   const tasksResponse=await pm.request.get(`${base}/api/v1/projects/${project.id}/tasks`);
   const projectTasks=await tasksResponse.json();
+  const latestDue=projectTasks.map(row=>row.due_date).filter(Boolean).sort().at(-1);
   const task=projectTasks.find(row=>row.title==='Fatigue test setup');
   if(!task)throw new Error('Seeded task is missing');
 
@@ -28,6 +29,9 @@ try{
   await pm.getByRole('heading',{name:'Edit project'}).waitFor();
   if(await pm.getByLabel('Project name').inputValue()!==project.name)throw new Error('Project name was not filled for editing');
   if(await pm.getByLabel('Project deadline').inputValue()!==project.target_date)throw new Error('Project deadline was not filled for editing');
+  await pm.getByLabel('Project deadline').fill(latestDue);
+  await pm.getByText(/due on or after this deadline/).waitFor();
+  if(await pm.getByRole('button',{name:'Save project'}).isEnabled())throw new Error('A conflicting shortened deadline can be saved');
   await pm.getByRole('button',{name:'Cancel'}).click();
   await pm.getByTestId('nav-settings').click();
   if(await pm.getByRole('button',{name:'New project'}).count())throw new Error('Project creation remains in Settings');
@@ -42,7 +46,6 @@ try{
 
   const invalidProject=await pm.request.post(`${base}/api/v1/projects`,{data:{name:'Missing deadline'}});
   if(invalidProject.status()!==400)throw new Error(`Project without deadline returned ${invalidProject.status()}`);
-  const latestDue=projectTasks.map(row=>row.due_date).filter(Boolean).sort().at(-1);
   const invalidProjectEdit=await pm.request.patch(`${base}/api/v1/projects/${project.id}`,{data:{target_date:latestDue}});
   if(invalidProjectEdit.status()!==400)throw new Error(`Project deadline before tasks returned ${invalidProjectEdit.status()}`);
   const invalidTask=await pm.request.post(`${base}/api/v1/projects/${project.id}/tasks`,{data:{title:'Invalid deadline',owner_id:task.owner_id,due_date:project.target_date}});

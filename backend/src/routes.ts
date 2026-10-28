@@ -60,7 +60,8 @@ api.patch('/projects/:projectId',handler(async(req,res)=>{
   const changes=parse(z.object({name:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),target_date:z.string().date().optional()}).strict(),req.body);
   if(!Object.keys(changes).length)throw new HttpError(400,'No changes');
   const current=await one<{name:string;description:string;target_date:string|null}>(db,'SELECT name,description,target_date FROM projects WHERE id=$1',[pid]);
-  if(changes.target_date){
+  // An increase can be used to repair a project that already has tasks beyond its old deadline.
+  if(changes.target_date&&(!current?.target_date||changes.target_date<current.target_date)){
     const latest=await one<{due_date:string|null}>(db,`SELECT max(due_date)::text AS due_date FROM (
       SELECT due_date FROM tasks WHERE project_id=$1
       UNION ALL
