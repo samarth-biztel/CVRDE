@@ -14,6 +14,9 @@ describe('fictional demo workflows', () => {
     }
     const projects=await pm.get('/api/v1/projects');expect(projects.status).toBe(200);
     const project=projects.body.find((p:{name:string})=>p.name==='Engine Component Development — Demo');expect(project).toBeTruthy();
+    expect((await s1.patch(`/api/v1/projects/${project.id}`).send({name:'Unauthorized edit'})).status).toBe(404);
+    const updatedProject=await pm.patch(`/api/v1/projects/${project.id}`).send({description:'Workflow verification project'});
+    expect(updatedProject.status).toBe(200);expect(updatedProject.body.description).toBe('Workflow verification project');
     const tasks=await pm.get(`/api/v1/projects/${project.id}/tasks`);expect(tasks.status).toBe(200);
     const find=(title:string)=>tasks.body.find((t:{title:string})=>t.title===title);
     const thermal=find('Thermal analysis report'),material=find('Material sample testing'),fatigue=find('Fatigue test setup'),drawing=find('Component drawing review');

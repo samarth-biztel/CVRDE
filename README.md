@@ -60,7 +60,7 @@ flowchart LR
 
 | Step | Where | What to do |
 |---|---|---|
-| 1. Set up work | **Projects → New project**, then **Settings** | Create a project with a deadline. In Settings, add existing user accounts to its team and groups manually, or import an Excel sheet with `username` and optional `group` columns. Configure group permissions there. |
+| 1. Set up work | **Projects → New project / Edit project**, then **Settings** | Create a project with a deadline. Managers can edit its name, description, and deadline; the new deadline must remain after all task due dates and pending extensions. In Settings, add existing user accounts to its team and groups manually, or import an Excel sheet with `username` and optional `group` columns. Configure group permissions there. |
 | 2. Create tasks | **Tasks → New task** | Choose owner, due date before the project deadline, priority, optional **Linked to** task, description, and sharing group. The task starts in **New**. Open a task and select **Edit task** to change its details. |
 | 3. Monitor | **Overview**, **Tasks** | Follow totals, overdue work, and the task table. Open a task for progress, files, requests, comments, and history. |
 | 4. Review requests | **Review** | Filter by request type or task. Approve or reject employee reassignment, due date extension, and prerequisite requests. Return or accept results. |

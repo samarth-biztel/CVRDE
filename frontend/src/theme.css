@@ -204,6 +204,8 @@ td strong{color:var(--text)}
 .project-summary{display:flex;justify-content:space-between;gap:26px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);padding:27px;margin-bottom:24px}
 .project-summary h2{font-size:1.7rem;margin:8px 0}
 .project-summary p{color:var(--muted);margin:0}
+.project-summary .project-deadline{margin-top:12px}
+.project-summary .project-deadline strong{color:var(--text)}
 .project-summary-stats{display:grid;grid-template-columns:auto auto;gap:2px 12px;align-items:center;white-space:nowrap}
 .project-summary-stats strong{font:800 1.45rem "Cabinet Grotesk",sans-serif}
 .project-summary-stats span{color:var(--muted);font-size:.7rem}

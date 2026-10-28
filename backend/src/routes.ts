@@ -55,6 +55,28 @@ api.post('/projects',handler(async(req,res)=>{
   const p=await db.transaction().execute(async tx=>{const project=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING *',[data.name,data.description,data.target_date,u.id]);await history(tx,project!.id,null,'PROJECT_CREATED',u.id,{name:data.name});return project;});
   send(res,p,201);
 }));
+api.patch('/projects/:projectId',handler(async(req,res)=>{
+  const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
+  const changes=parse(z.object({name:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),target_date:z.string().date().optional()}).strict(),req.body);
+  if(!Object.keys(changes).length)throw new HttpError(400,'No changes');
+  const current=await one<{name:string;description:string;target_date:string|null}>(db,'SELECT name,description,target_date FROM projects WHERE id=$1',[pid]);
+  if(changes.target_date){
+    const latest=await one<{due_date:string|null}>(db,`SELECT max(due_date)::text AS due_date FROM (
+      SELECT due_date FROM tasks WHERE project_id=$1
+      UNION ALL
+      SELECT e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id WHERE t.project_id=$1 AND e.status='PENDING'
+    ) dates`,[pid]);
+    if(latest?.due_date&&changes.target_date<=latest.due_date)throw new HttpError(400,'Project deadline must be after all task due dates and pending extensions');
+  }
+  const entries=Object.entries(changes),diff=Object.fromEntries(entries.map(([key,next])=>[key,{old:current?.[key as keyof typeof current],new:next}]));
+  const updated=await db.transaction().execute(async tx=>{
+    const fields=entries.map(([key],index)=>`${key}=$${index+1}`).join(',');
+    const project=await one(tx,`UPDATE projects SET ${fields} WHERE id=$${entries.length+1} RETURNING *`,[...entries.map(([,next])=>next),pid]);
+    await history(tx,pid,null,'PROJECT_UPDATED',u.id,diff);
+    return project;
+  });
+  send(res,updated);
+}));
 api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await getProject(pid));}));
 api.post('/projects/:projectId/members',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
