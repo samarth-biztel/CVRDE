@@ -8,15 +8,15 @@ import { db, one, query } from './db.js';
 import { currentUser, handler, history, HttpError, projectManager, projectMember, taskAccess, taskById, uid } from './core.js';
 
 export const fileRoutes=Router();
-const allowed=new Set(['.pdf','.docx','.xlsx','.pptx','.csv','.txt','.png','.jpg','.jpeg']);
-const mime:Record<string,string>={'.pdf':'application/pdf','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','.csv':'text/csv','.txt':'text/plain','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg'};
+const allowed=new Set(['.pdf','.docx','.xlsx','.pptx','.csv','.txt','.png','.jpg','.jpeg','.bmp']);
+const mime:Record<string,string>={'.pdf':'application/pdf','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','.csv':'text/csv','.txt':'text/plain','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.bmp':'image/bmp'};
 // The Vercel request body limit is 4.5 MB; leave room for multipart headers.
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:4*1024*1024},fileFilter:(_req,file,cb)=>cb(null,allowed.has(extname(file.originalname).toLowerCase()))});
 type Attachment={id:number;project_id:number;task_id:number|null;document_key:string;version_no:number;stored_name:string;original_name:string;mime_type:string;size_bytes:number};
 function validateFile(data:Buffer,name:string){
   const ext=extname(name).toLowerCase(),bytes=data.subarray(0,8);
   const starts=(signature:number[])=>signature.every((b,i)=>bytes[i]===b);
-  const okay=ext==='.pdf'?starts([0x25,0x50,0x44,0x46]):ext==='.png'?starts([0x89,0x50,0x4e,0x47]):['.jpg','.jpeg'].includes(ext)?starts([0xff,0xd8,0xff]):['.docx','.xlsx','.pptx'].includes(ext)?starts([0x50,0x4b]):true;
+  const okay=ext==='.pdf'?starts([0x25,0x50,0x44,0x46]):ext==='.png'?starts([0x89,0x50,0x4e,0x47]):ext==='.bmp'?starts([0x42,0x4d]):['.jpg','.jpeg'].includes(ext)?starts([0xff,0xd8,0xff]):['.docx','.xlsx','.pptx'].includes(ext)?starts([0x50,0x4b]):true;
   if(!okay)throw new HttpError(400,'File content does not match extension');
   if(['.docx','.xlsx','.pptx'].includes(ext)){
     let end=-1;

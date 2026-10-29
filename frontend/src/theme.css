@@ -133,7 +133,7 @@ td strong{color:var(--text)}
 .pill{border-radius:2px;background:var(--subtle);color:var(--muted);font-size:.61rem;letter-spacing:.1em;padding:6px 9px}
 .pill.in_progress,.pill.open{background:var(--accent-soft);color:var(--accent)}
 .pill.submitted,.pill.pending,.pill.awaiting_approval{background:var(--subtle);color:var(--text)}
-.pill.completed,.pill.accepted,.pill.approved,.pill.resolved{background:var(--subtle);color:var(--text)}
+.pill.completed,.pill.accepted,.pill.approved,.pill.resolved{background:var(--subtle);color:var(--success)}
 .pill.rejected,.pill.returned{background:var(--subtle);color:var(--muted)}
 .notice{border-radius:2px}
 .notice.success{background:var(--accent-soft);color:var(--accent)}
@@ -142,10 +142,19 @@ td strong{color:var(--text)}
 .chips button{background:var(--subtle)}
 .file-list a{border-color:var(--border);border-radius:2px;color:var(--text)}
 .file-list a:hover{background:var(--subtle)}
+.file-list a{display:flex;align-items:center;gap:10px}
+.file-list .upload-tick{color:var(--success)}
+.file-label{display:flex;flex-direction:column;min-width:0}
 .upload-area{min-width:0}
+.upload-selected{margin:10px 0 0;color:var(--muted);font-size:.76rem;overflow-wrap:anywhere}
+.upload-selected strong{color:var(--text)}
 .upload-confirmation{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--success);font-size:.8rem;overflow-wrap:anywhere}
 .upload-tick{display:grid;place-items:center;flex:none;width:18px;height:18px;border:1px solid var(--success);font-size:.8rem;font-weight:800;line-height:1}
 .upload-error{margin-top:10px}
+.task-complete-banner{display:flex;align-items:center;gap:12px;border:1px solid var(--success);padding:14px 16px;margin:0 0 20px;color:var(--success);font-size:.78rem}
+.task-complete-banner>div{display:flex;flex-direction:column;gap:3px}
+.task-complete-banner strong{font-size:.9rem}
+.task-complete-banner span+div span{color:var(--muted)}
 .history-row pre{background:var(--subtle);color:var(--muted);border-radius:2px}
 .history-dot{background:var(--accent)}
 .text-button{color:var(--accent)}

@@ -16,6 +16,8 @@ async function checkUpload(page,card,routePattern,buttonLabel){
   });
   await card.getByLabel('Document key').fill('upload-check');
   await card.getByLabel('Choose file').setInputFiles({name:'approved-evidence.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\napproved')});
+  await card.getByText('Selected:').waitFor();
+  if(await card.getByTestId('upload-success').count())throw new Error('Success tick appears before upload');
   await card.getByRole('button',{name:buttonLabel}).click();
   const success=card.getByTestId('upload-success');
   await success.waitFor();
@@ -40,6 +42,10 @@ try{
 
   const scientist=await browser.newPage();
   await login(scientist,'scientist2.demo');
+  await scientist.getByRole('row',{name:/Component drawing review/}).click();
+  await scientist.getByTestId('task-completed').getByText('Task completed').waitFor();
+  await scientist.locator('.file-list .upload-tick').first().waitFor();
+  await scientist.getByRole('button',{name:/Back to tasks/}).click();
   await scientist.getByRole('row',{name:/Thermal analysis report/}).click();
   const taskFiles=scientist.locator('.card').filter({has:scientist.getByRole('heading',{name:'Discussion and files'})});
   await taskFiles.getByRole('button',{name:'Upload file'}).waitFor();
