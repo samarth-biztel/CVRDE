@@ -34,7 +34,8 @@ try{
       ['pm.demo','Demo Project Manager','PM',process.env.DEMO_EMAIL_PM || 'pm.demo@example.invalid'],
       ['scientist1.demo','Demo Scientist One','MEMBER',process.env.DEMO_EMAIL_S1 || 'scientist1.demo@example.invalid'],
       ['scientist2.demo','Demo Scientist Two','MEMBER',process.env.DEMO_EMAIL_S2 || 'scientist2.demo@example.invalid'],
-      ['reviewer.demo','Demo Reviewer','REVIEWER',process.env.DEMO_EMAIL_REVIEWER || 'reviewer.demo@example.invalid']
+      ['reviewer.demo','Demo Reviewer','REVIEWER',process.env.DEMO_EMAIL_REVIEWER || 'reviewer.demo@example.invalid'],
+      ['admin.demo','Demo Administrator','ADMIN','admin.demo@example.invalid']
     ];
     for(const [username,full_name,role,email] of demoUsers){
       const row=await one<{id:number}>(tx,`INSERT INTO users(username,password_hash,full_name,email,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash,full_name=excluded.full_name,email=excluded.email,role=excluded.role,active=true RETURNING id`,[username,hash,full_name,email,role]);ids[username]=row!.id;

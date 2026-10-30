@@ -45,11 +45,29 @@ api.post('/auth/logout',handler(async(req,res)=>{
   res.clearCookie('cvrde_session',{path:'/'});send(res,{ok:true});
 }));
 api.get('/auth/me',handler(async(_req,res)=>{send(res,currentUser(res));}));
-api.get('/users',handler(async(_req,res)=>{const u=currentUser(res);const rows=await query(db,"SELECT id,username,full_name,role FROM users WHERE active AND ($1='PM' OR role IN ('MEMBER','REVIEWER')) ORDER BY id",[u.role]);send(res,rows);}));
+api.get('/users',handler(async(_req,res)=>{const u=currentUser(res);const rows=await query(db,"SELECT id,username,full_name,email,role,active FROM users WHERE $1='ADMIN' OR active AND ($1='PM' OR role IN ('MEMBER','REVIEWER')) ORDER BY id",[u.role]);send(res,rows);}));
+api.patch('/users/:userId/active',handler(async(req,res)=>{
+  const u=currentUser(res);role(u,['ADMIN']);const userId=id(req.params.userId),{active}=parse(z.object({active:z.boolean()}),req.body);
+  if(userId===u.id&&!active)throw new HttpError(400,'You cannot deactivate your own account');
+  const changed=await db.transaction().execute(async tx=>{const row=await one<{id:number;active:boolean}>(tx,'UPDATE users SET active=$1 WHERE id=$2 AND active<>$1 RETURNING id,active',[active,userId]);if(row)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['USER_ACTIVE_CHANGED',u.id,JSON.stringify({user_id:userId,active})]);return row;});
+  if(!changed&&!await one(db,'SELECT 1 FROM users WHERE id=$1',[userId]))throw new HttpError(404,'Account not found');
+  if(!active)await query(db,'DELETE FROM sessions WHERE user_id=$1',[userId]);send(res,{ok:true,active});
+}));
+api.post('/projects/:projectId/users',handler(async(req,res)=>{
+  const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
+  const d=parse(z.object({username:z.string().trim().min(3).max(80).regex(/^[a-z0-9._-]+$/i),full_name:z.string().trim().min(2).max(150),email:z.email(),password:z.string().min(10).max(200)}),req.body);
+  if(await one(db,'SELECT 1 FROM users WHERE lower(username)=lower($1)',[d.username]))throw new HttpError(409,'Username already exists');
+  const hash=await bcrypt.hash(d.password,12);
+  const created=await db.transaction().execute(async tx=>{const user=await one<{id:number;username:string;full_name:string;role:string}>(tx,"INSERT INTO users(username,password_hash,full_name,email,role) VALUES($1,$2,$3,$4,'MEMBER') RETURNING id,username,full_name,role",[d.username,hash,d.full_name,d.email]);await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2)',[pid,user!.id]);await history(tx,pid,null,'USER_CREATED',u.id,{user_id:user!.id,username:d.username});return user;});send(res,created,201);
+}));
 
 api.get('/projects',handler(async(_req,res)=>{
   const u=currentUser(res);
-  send(res,await query(db,`SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
+  send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
+    (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id) AS task_total,
+    (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status='DONE') AS task_done,
+    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-interval '5 days')) AS at_risk
+    FROM projects p JOIN users manager ON manager.id=p.manager_id LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
 }));
 api.post('/projects',handler(async(req,res)=>{
   const u=currentUser(res);role(u,['PM']);
@@ -88,6 +106,11 @@ api.post('/projects/:projectId/members',handler(async(req,res)=>{
   await db.transaction().execute(async tx=>{await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);await history(tx,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});});send(res,{ok:true},201);
 }));
 api.get('/projects/:projectId/members',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await query(db,'SELECT u.id,u.full_name,u.username,u.role FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 ORDER BY u.id',[pid]));}));
+api.delete('/projects/:projectId/members/:userId',handler(async(req,res)=>{
+  const u=currentUser(res),pid=id(req.params.projectId),memberId=id(req.params.userId);await projectManager(u,pid);
+  if(await one(db,'SELECT 1 FROM tasks WHERE project_id=$1 AND owner_id=$2 LIMIT 1',[pid,memberId]))throw new HttpError(409,'Reassign this member’s tasks before removal');
+  await db.transaction().execute(async tx=>{await query(tx,'DELETE FROM group_members WHERE user_id=$1 AND group_id IN (SELECT id FROM project_groups WHERE project_id=$2)',[memberId,pid]);const removed=await query(tx,'DELETE FROM project_members WHERE project_id=$1 AND user_id=$2 RETURNING user_id',[pid,memberId]);if(removed.length)await history(tx,pid,null,'PROJECT_MEMBER_REMOVED',u.id,{user_id:memberId});});send(res,{ok:true});
+}));
 
 api.get('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
@@ -101,7 +124,7 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
   const d=parse(taskInput,req.body);
   await checkProjectDeadline(pid,d.due_date);
-  const member=await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
+  const member=d.owner_id===u.id||await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
   let parent:Task|undefined;
   if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid)throw new HttpError(400,'Parent must belong to project');}
   const task=await db.transaction().execute(async tx=>{
@@ -151,6 +174,14 @@ api.patch('/tasks/:taskId',handler(async(req,res)=>{
     const row=await one(tx,`UPDATE tasks SET ${clause},updated_at=now() WHERE id=$${values.length+1} RETURNING *`,[...values,task.id]);
     await history(tx,task.project_id,task.id,'TASK_UPDATED',u.id,diff);return row;
   });send(res,result);
+}));
+api.patch('/tasks/:taskId/assignment',handler(async(req,res)=>{
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));await projectManager(u,task.project_id);
+  const {owner_id}=parse(z.object({owner_id:z.number().int().positive()}),req.body);
+  if(owner_id!==u.id&&!await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[task.project_id,owner_id]))throw new HttpError(400,'Owner must belong to project');
+  if(owner_id===task.owner_id)return send(res,{ok:true});
+  await db.transaction().execute(async tx=>{await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[owner_id,task.id]);await history(tx,task.project_id,task.id,'TASK_REASSIGNED',u.id,{old:task.owner_id,new:owner_id});});
+  await notify('ASSIGNED',owner_id,task.id,`Task assigned: ${task.title}`,task.title);send(res,{ok:true});
 }));
 api.post('/tasks/:taskId/status',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(task.owner_id!==u.id)throw new HttpError(403,'Owner only');
@@ -223,6 +254,7 @@ api.post('/tasks/:taskId/extension-requests',handler(async(req,res)=>{
 api.post('/extension-requests/:requestId/decision',handler(async(req,res)=>{
   const u=currentUser(res),requestId=id(req.params.requestId),d=parse(z.object({approve:z.boolean(),comment:z.string().max(2000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;requested_by:number;new_due_date:string;status:string}>(db,'SELECT * FROM due_date_extensions WHERE id=$1',[requestId]);if(!r)throw new HttpError(404,'Request not found');
+  if(!d.approve&&!d.comment.trim())throw new HttpError(400,'A reason is required when declining a request');
   const task=await taskById(r.task_id);await projectManager(u,task.project_id);if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
   if(d.approve)await checkProjectDeadline(task.project_id,r.new_due_date);
   const status=d.approve?'APPROVED':'REJECTED';
@@ -270,6 +302,7 @@ api.post('/tasks/:taskId/reassignments',handler(async(req,res)=>{
 api.post('/reassignments/:requestId/decision',handler(async(req,res)=>{
   const u=currentUser(res),rid=id(req.params.requestId),d=parse(z.object({approve:z.boolean(),comment:z.string().max(2000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;original_owner_id:number;new_owner_id:number;reviewer_id:number;requested_by:number;status:string;work_from:string|null;work_until:string|null}>(db,'SELECT * FROM reassignments WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Request not found');
+  if(!d.approve&&!d.comment.trim())throw new HttpError(400,'A reason is required when declining a request');
   const task=await taskById(r.task_id);
   if(u.id!==r.reviewer_id || (u.role!=='REVIEWER'&&u.id!==task.manager_id))throw new HttpError(403,'Approver only');if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
   if(task.owner_id!==r.original_owner_id)throw new HttpError(409,'Task owner changed since request');
@@ -292,6 +325,7 @@ api.get('/pendencies/:pendencyId',handler(async(req,res)=>{const u=currentUser(r
 api.post('/pendencies/:pendencyId/decision',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.pendencyId),d=parse(z.object({approve:z.boolean(),comment:z.string().max(2000).default('')}),req.body);
   const p=await one<{id:number;blocked_task_id:number;raised_by:number;responsible_user_id:number;approver_id:number;status:string}>(db,'SELECT * FROM pendencies WHERE id=$1',[pid]);if(!p)throw new HttpError(404,'Pendency not found');if(u.id!==p.approver_id || p.status!=='AWAITING_APPROVAL')throw new HttpError(409,'No pending approval');
+  if(!d.approve&&!d.comment.trim())throw new HttpError(400,'A reason is required when declining a request');
   const task=await taskById(p.blocked_task_id),status=d.approve?'OPEN':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE pendencies SET status=$1,resolution=$2 WHERE id=$3',[status,d.comment || null,pid]);await history(tx,task.project_id,task.id,'PENDENCY_DECIDED',u.id,{pendency_id:pid,status,comment:d.comment});});
   await notify('REQUEST_ANSWERED',p.raised_by,task.id,`Prerequisite ${status.toLowerCase()}: ${task.title}`,d.comment || status);if(d.approve)await notify('PENDENCY_OPEN',p.responsible_user_id,task.id,`Prerequisite assigned: ${task.title}`,d.comment || task.title);send(res,{status});
@@ -307,12 +341,39 @@ api.post('/pendencies/:pendencyId/resolve',handler(async(req,res)=>{
 api.get('/me/pending-actions',handler(async(_req,res)=>{
   const u=currentUser(res);
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
-    query(db,`SELECT r.id,t.id AS task_id,t.title,'RESULT_REVIEW' AS kind FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id WHERE p.manager_id=$1 AND r.review_status='PENDING'`,[u.id]),
-    query(db,`SELECT e.id,t.id AS task_id,t.title,'EXTENSION' AS kind FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
-    query(db,`SELECT r.id,t.id AS task_id,t.title,'REASSIGNMENT' AS kind,r.reason,r.work_from,r.work_until FROM reassignments r JOIN tasks t ON t.id=r.task_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
-    query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.title,'PENDENCY_APPROVAL' AS kind FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),
-    query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.title,'PENDENCY_RESOLVE' AS kind FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id WHERE p.responsible_user_id=$1 AND p.status='OPEN'`,[u.id])
-  ]);send(res,[...results,...extensions,...reassignments,...approvals,...resolutions]);
+    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(array_agg(json_build_object('id',a.id,'name',a.original_name)),'{}') FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=r.submitted_by WHERE p.manager_id=$1 AND r.review_status='PENDING'`,[u.id]),
+    query(db,`SELECT e.id,t.id AS task_id,t.project_id,t.title,t.due_date,'EXTENSION' AS kind,e.created_at AS requested_at,e.reason AS summary,u.full_name AS submitted_by,e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=e.requested_by WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'REASSIGNMENT' AS kind,r.created_at AS requested_at,r.reason AS summary,u.full_name AS submitted_by,r.work_from,r.work_until,nu.full_name AS new_owner_name FROM reassignments r JOIN tasks t ON t.id=r.task_id JOIN users u ON u.id=r.requested_by JOIN users nu ON nu.id=r.new_owner_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
+    query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_APPROVAL' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),
+    query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_RESOLVE' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.responsible_user_id=$1 AND p.status='OPEN'`,[u.id])
+  ]);send(res,[...results,...extensions,...reassignments,...approvals,...resolutions].sort((a,b)=>String(a.requested_at).localeCompare(String(b.requested_at))));
+}));
+api.post('/decisions/undo',handler(async(req,res)=>{
+  const u=currentUser(res),d=parse(z.object({kind:z.enum(['RESULT_REVIEW','EXTENSION','REASSIGNMENT','PENDENCY_APPROVAL']),id:z.number().int().positive()}),req.body);
+  const table=d.kind==='RESULT_REVIEW'?'task_results':d.kind==='EXTENSION'?'due_date_extensions':d.kind==='REASSIGNMENT'?'reassignments':'pendencies';
+  const record=await one<Record<string,unknown>>(db,`SELECT * FROM ${table} WHERE id=$1`,[d.id]);if(!record)throw new HttpError(404,'Decision not found');
+  const task=await taskById(Number(d.kind==='PENDENCY_APPROVAL'?record.blocked_task_id:record.task_id));await projectManager(u,task.project_id);
+  const decidedAt=d.kind==='RESULT_REVIEW'?record.reviewed_at:d.kind==='PENDENCY_APPROVAL'?null:record.decided_at;
+  const last=await one<{event_type:string;created_at:string;actor_id:number}>(db,'SELECT event_type,created_at,actor_id FROM task_history WHERE task_id=$1 ORDER BY id DESC LIMIT 1',[task.id]);
+  const expected=d.kind==='RESULT_REVIEW'?'RESULT_REVIEWED':d.kind==='EXTENSION'?'EXTENSION_DECIDED':d.kind==='REASSIGNMENT'?'REASSIGNMENT_DECIDED':'PENDENCY_DECIDED';
+  const when=decidedAt?new Date(String(decidedAt)).getTime():last?new Date(last.created_at).getTime():0;
+  if(!last||last.event_type!==expected||Number(last.actor_id)!==u.id||Date.now()-when>30000)throw new HttpError(409,'Undo is no longer available');
+  await db.transaction().execute(async tx=>{
+    if(d.kind==='RESULT_REVIEW'){
+      const review=String(record.review_status),status=review==='ACCEPTED'?'DONE':'RETURNED';if(!['ACCEPTED','RETURNED'].includes(review)||task.status!==status)throw new HttpError(409,'Task changed since decision');
+      await query(tx,"UPDATE task_results SET review_status='PENDING',review_comment=NULL,reviewed_by=NULL,reviewed_at=NULL WHERE id=$1",[d.id]);await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);
+    }else if(d.kind==='EXTENSION'){
+      if(record.status==='PENDING'||record.status==='APPROVED'&&String(task.due_date).slice(0,10)!==String(record.new_due_date).slice(0,10))throw new HttpError(409,'Task changed since decision');
+      await query(tx,"UPDATE due_date_extensions SET status='PENDING',decided_by=NULL,decided_at=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[record.old_due_date,task.id]);
+    }else if(d.kind==='REASSIGNMENT'){
+      if(record.status==='PENDING'||record.status==='APPROVED'&&task.owner_id!==Number(record.new_owner_id))throw new HttpError(409,'Task changed since decision');
+      await query(tx,"UPDATE reassignments SET status='PENDING',decided_at=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[record.original_owner_id,task.id]);
+    }else{
+      if(!['OPEN','REJECTED'].includes(String(record.status)))throw new HttpError(409,'Prerequisite changed since decision');
+      await query(tx,"UPDATE pendencies SET status='AWAITING_APPROVAL',resolution=NULL WHERE id=$1",[d.id]);
+    }
+    await history(tx,task.project_id,task.id,'DECISION_UNDONE',u.id,{kind:d.kind,decision_id:d.id});
+  });send(res,{ok:true});
 }));
 api.get('/tasks/:taskId/history',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');
@@ -333,6 +394,14 @@ api.get('/projects/:projectId/dashboard',handler(async(req,res)=>{
   const byStatus:Record<string,number>={NOT_STARTED:0,IN_PROGRESS:0,SUBMITTED:0,RETURNED:0,DONE:0},byOwner:Record<string,number>={};let total=0,overdue=0;
   for(const r of rows){const n=Number(r.count);total+=n;overdue+=Number(r.overdue_count);byStatus[r.status]=(byStatus[r.status]||0)+n;byOwner[String(r.owner_id)]=(byOwner[String(r.owner_id)]||0)+n;}
   send(res,{total,overdue,by_status:byStatus,by_owner:byOwner,completed:byStatus.DONE || 0,pending:total-(byStatus.DONE || 0)});
+}));
+api.get('/projects/:projectId/risk',handler(async(req,res)=>{
+  const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
+  const [tasks,activity,project]=await Promise.all([
+    query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at)) AS updated_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
+    query(db,`SELECT h.id,h.task_id,h.event_type,h.created_at,u.full_name AS actor_name,t.title AS task_title FROM task_history h JOIN users u ON u.id=h.actor_id LEFT JOIN tasks t ON t.id=h.task_id WHERE h.project_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 10`,[pid]),
+    one(db,'SELECT target_date FROM projects WHERE id=$1',[pid])
+  ]);send(res,{tasks,activity,deadline:project?.target_date||null});
 }));
 async function report(user:User,kind:'overdue'|'progress',params:Record<string,unknown>){
   role(user,['PM']);const projectId=id(params.project_id);await projectManager(user,projectId);

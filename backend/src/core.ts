@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { db, one, query, type Executor } from './db.js';
 import nodemailer from 'nodemailer';
 
-export type User = { id: number; username: string; full_name: string; email: string; role: 'PM' | 'MEMBER' | 'REVIEWER' };
+export type User = { id: number; username: string; full_name: string; email: string; role: 'ADMIN' | 'PM' | 'MEMBER' | 'REVIEWER' };
 export type Task = { id: number; project_id: number; parent_task_id: number | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
 export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 export const assert = (value: unknown, status: number, message: string): asserts value => { if (!value) throw new HttpError(status, message); };
@@ -58,7 +58,10 @@ export async function taskAccess(user: User, task: Task, action: Action): Promis
     const permission = await one<{ can_view_results:boolean; can_comment:boolean; can_link_pendency:boolean }>(db,
       'SELECT g.can_view_results,g.can_comment,g.can_link_pendency FROM project_groups g JOIN group_members gm ON gm.group_id=g.id WHERE g.id=$1 AND gm.user_id=$2',[task.group_id,user.id]);
     if (permission) {
-      if (action === 'EDIT' || action === 'LINK') throw new HttpError(403,'Task is read only');
+      if (action === 'EDIT') throw new HttpError(403,'Task is read only');
+      if (action === 'COMMENT' && !permission.can_comment) throw new HttpError(403,'Comments are disabled for this group');
+      if (action === 'LINK' && !permission.can_link_pendency) throw new HttpError(403,'Prerequisite linking is disabled for this group');
+      if (action === 'RESULTS' && !permission.can_view_results) throw new HttpError(403,'Results are hidden from this group');
       return 'FULL';
     }
   }

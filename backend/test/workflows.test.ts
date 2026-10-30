@@ -28,7 +28,8 @@ describe('fictional demo workflows', () => {
     expect((await s1.get(`/api/v1/tasks/${thermal.id}`)).status).toBe(200);
     expect((await s1.get(`/api/v1/tasks/${drawing.id}`)).status).toBe(404);
     expect((await s2.get(`/api/v1/tasks/${material.id}`)).status).toBe(200);
-    expect((await s2.get(`/api/v1/tasks/${material.id}/results`)).status).toBe(200);
+    expect((await s2.get(`/api/v1/tasks/${material.id}/results`)).status).toBe(403);
+    expect((await s1.get(`/api/v1/tasks/${thermal.id}/results`)).status).toBe(200);
     expect((await s2.post(`/api/v1/tasks/${material.id}/status`).send({})).status).toBe(403);
     expect((await s2.post(`/api/v1/tasks/${material.id}/progress`).send({percent:50,justification:'Viewer edit'})).status).toBe(403);
     expect((await s2.patch(`/api/v1/tasks/${material.id}`).send({title:'Viewer edit'})).status).toBe(404);

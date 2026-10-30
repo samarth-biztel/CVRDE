@@ -1,8 +1,8 @@
-export type User={id:number;username:string;full_name:string;role:'PM'|'MEMBER'|'REVIEWER'};
-export type Project={id:number;name:string;description:string;target_date:string|null;manager_id:number};
-export type Task={id:number;project_id:number;title:string;description:string;expected_deliverables?:string;owner_id:number;owner_name?:string;assigned_by_name?:string;project_name?:string;created_by?:number;priority:string;due_date:string|null;status:string;visibility:string;group_id:number|null;parent_task_id:number|null;plm_ref:string|null;progress_percent?:number;subtask_count?:{total:number;done:number};limited?:boolean};
+export type User={id:number;username:string;full_name:string;email?:string;active?:boolean;role:'ADMIN'|'PM'|'MEMBER'|'REVIEWER'};
+export type Project={id:number;name:string;description:string;target_date:string|null;manager_id:number;manager_name?:string;task_total?:number;task_done?:number;at_risk?:boolean};
+export type Task={id:number;project_id:number;title:string;description:string;expected_deliverables?:string;owner_id:number;owner_name?:string;assigned_by_name?:string;project_name?:string;created_by?:number;priority:string;due_date:string|null;updated_at?:string;status:string;visibility:string;group_id:number|null;parent_task_id:number|null;plm_ref:string|null;progress_percent?:number;subtask_count?:{total:number;done:number};limited?:boolean};
 export type Group={id:number;name:string;description:string;can_view_results:boolean;can_comment:boolean;can_link_pendency:boolean;member_ids:number[]};
-export type Action={id:number;task_id:number;title:string;kind:string;reason?:string;work_from?:string|null;work_until?:string|null};
+export type Action={id:number;task_id:number;project_id:number;title:string;kind:string;requested_at:string;submitted_by:string;summary?:string;due_date?:string|null;new_due_date?:string|null;new_owner_name?:string;files?:{id:number;name:string}[];reason?:string;work_from?:string|null;work_until?:string|null};
 export type Result={id:number;task_id:number;version_no:number;work_completed:string;outcome:string;review_status:string;review_comment:string|null;attachment_names?:string[]};
 export type Attachment={id:number;document_key:string;version_no:number;original_name:string;uploaded_at:string;result_id?:number|null};
 export type Pendency={id:number;blocked_task_id:number;responsible_user_id:number;status:string;description:string;type:string;raised_by:number;approver_id:number;depends_on_task_id?:number;depends_on_title?:string;depends_on_status?:string;blocked?:boolean};
