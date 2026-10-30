@@ -11,6 +11,7 @@ type Props={
   onTask:(id:number)=>void;
   projectId:number|null;
   role:User['role'];
+  canReview:boolean;
 };
 const pages=[
   {name:'Overview',screen:'overview'},
@@ -24,7 +25,7 @@ const pages=[
   {name:'Accounts',screen:'accounts'}
 ];
 
-export default function CommandPalette({open,onClose,onNavigate,onTask,projectId,role}:Props){
+export default function CommandPalette({open,onClose,onNavigate,onTask,projectId,role,canReview}:Props){
   const [search,setSearch]=useState('');
   const tasks=useQuery({queryKey:['tasks',projectId],queryFn:()=>api<Task[]>(`/projects/${projectId}/tasks`),enabled:open&&!!projectId&&role!=='ADMIN'});
   function selectPage(screen:string){onNavigate(screen);onClose();setSearch('')}
@@ -38,7 +39,7 @@ export default function CommandPalette({open,onClose,onNavigate,onTask,projectId
     <CommandList>
       <CommandEmpty>No matching pages or tasks.</CommandEmpty>
       <CommandGroup heading="PAGES">
-        {pages.filter(page=>role==='PM'? !['mine','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions'].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
+        {pages.filter(page=>role==='PM'? !['mine','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions',...(canReview?['pending']:[])].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
       </CommandGroup>
       {!!tasks.data?.length&&<CommandGroup heading="TASKS">
         {tasks.data.map(task=><CommandItem data-testid={`command-task-${task.id}`} key={task.id} value={task.title} onSelect={()=>selectTask(task.id)}>{task.title}<span className="text-xs text-[var(--muted)]">{task.status.replaceAll('_',' ')}</span></CommandItem>)}

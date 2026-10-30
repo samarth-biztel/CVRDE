@@ -53,7 +53,7 @@ export async function taskById(id: number): Promise<Task> {
 }
 export type Action = 'VIEW' | 'EDIT' | 'RESULTS' | 'COMMENT' | 'LINK';
 export async function taskAccess(user: User, task: Task, action: Action): Promise<'FULL' | 'LIMITED'> {
-  if (user.id === task.manager_id || user.id === task.owner_id || user.id === task.sub_project_owner_id) return 'FULL';
+  if (user.id === task.manager_id || user.id === task.owner_id || user.id === task.sub_project_owner_id || task.sub_project_id && user.id===task.created_by) return 'FULL';
   if (task.sub_project_id && (action === 'VIEW' || action === 'COMMENT')) {
     const teammate = await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[task.sub_project_id,user.id]);
     if (teammate) return 'FULL';

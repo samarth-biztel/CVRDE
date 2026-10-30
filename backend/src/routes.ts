@@ -17,6 +17,7 @@ type SubProject={id:number;project_id:number;name:string;objective:string;owner_
 const subProjectInput=z.object({name:z.string().trim().min(1).max(200),objective:z.string().trim().max(10000),owner_id:z.number().int().positive(),due_date:z.string().date()});
 async function subProjectById(subProjectId:number){const item=await one<SubProject>(db,'SELECT id,project_id,name,objective,owner_id,due_date FROM sub_projects WHERE id=$1',[subProjectId]);if(!item)throw new HttpError(404,'Sub-project not found');return item;}
 async function canEditTask(user:User,task:Task){if(user.role==='PM'&&user.id===task.manager_id)return;if(task.sub_project_id&&user.id===task.sub_project_owner_id)return;throw new HttpError(task.sub_project_id?403:404,'Only the PM or sub-project owner can edit this task');}
+function canReviewTask(user:User,task:Task){return user.role==='PM'&&user.id===task.manager_id||!!task.sub_project_id&&(user.id===task.created_by||user.id===task.sub_project_owner_id);}
 async function checkProjectDeadline(projectId:number,dueDate:string|null|undefined){
   if(!dueDate)return;
   const project=await one<{target_date:string|null}>(db,'SELECT target_date FROM projects WHERE id=$1',[projectId]);
@@ -315,13 +316,13 @@ api.post('/tasks/:taskId/results',handler(async(req,res)=>{
     const r=await one(tx,`INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,(SELECT coalesce(max(version_no),0)+1 FROM task_results WHERE task_id=$1),$2,$3,$4) RETURNING *`,[task.id,d.work_completed,d.outcome,u.id]);
     const attached=await query(tx,'UPDATE attachments SET result_id=$1 WHERE id=ANY($2::bigint[]) AND task_id=$3 AND result_id IS NULL RETURNING id',[(r as {id:number}).id,d.attachment_ids,task.id]);if(attached.length!==d.attachment_ids.length)throw new HttpError(400,'Invalid submission files');
     await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'RESULT_SUBMITTED',u.id,{result_id:(r as {id:number}).id,version_no:(r as {version_no:number}).version_no,attachment_ids:d.attachment_ids,old:task.status,new:'SUBMITTED'});return r;
-  });await notify('SUBMITTED',task.manager_id,task.id,`Result submitted: ${task.title}`,d.outcome);send(res,row,201);
+  });await notify('SUBMITTED',task.created_by,task.id,`Result submitted: ${task.title}`,d.outcome);send(res,row,201);
 }));
 api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,"SELECT r.*,(SELECT coalesce(array_agg(a.original_name ORDER BY a.id),'{}'::text[]) FROM attachments a WHERE a.result_id=r.id) AS attachment_names,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r WHERE r.task_id=$1 ORDER BY r.version_no DESC",[task.id]));}));
 api.post('/results/:resultId/review',handler(async(req,res)=>{
   const u=currentUser(res),rid=id(req.params.resultId),d=parse(z.object({accept:z.boolean(),comment:z.string().max(3000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;status:string;review_status:string;submitted_by:number}>(db,'SELECT * FROM task_results WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Result not found');
-  const task=await taskById(r.task_id);await projectManager(u,task.project_id);if(task.status!=='SUBMITTED' || r.review_status!=='PENDING')throw new HttpError(409,'Result is not pending review');
+  const task=await taskById(r.task_id);if(!canReviewTask(u,task))throw new HttpError(403,'Only the reviewer or PM can review this submission');if(task.status!=='SUBMITTED' || r.review_status!=='PENDING')throw new HttpError(409,'Result is not pending review');
   if(!d.accept&&!d.comment.trim())throw new HttpError(400,'A reason is required when returning work');
   const review=d.accept?'ACCEPTED':'RETURNED', status=d.accept?'DONE':'RETURNED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE task_results SET review_status=$1,review_comment=$2,reviewed_by=$3,reviewed_at=now() WHERE id=$4',[review,d.comment,u.id,rid]);await query(tx,'UPDATE tasks SET status=$1,updated_at=now() WHERE id=$2',[status,task.id]);await history(tx,task.project_id,task.id,'RESULT_REVIEWED',u.id,{result_id:rid,review,comment:d.comment,old:'SUBMITTED',new:status});});
@@ -406,21 +407,27 @@ api.get('/me/submissions',handler(async(_req,res)=>{
   ) submissions ORDER BY created_at DESC,kind,id DESC`,[u.id]));
 }));
 
+api.get('/me/reviewer-scope',handler(async(_req,res)=>{
+  const u=currentUser(res);
+  const row=await one<{can_review:boolean}>(db,'SELECT EXISTS(SELECT 1 FROM sub_projects WHERE owner_id=$1) OR EXISTS(SELECT 1 FROM tasks WHERE sub_project_id IS NOT NULL AND created_by=$1) AS can_review',[u.id]);
+  send(res,{can_review:u.role==='PM'||u.role==='REVIEWER'||!!row?.can_review});
+}));
 api.get('/me/pending-actions',handler(async(_req,res)=>{
-  const u=currentUser(res);role(u,['PM','REVIEWER']);
+  const u=currentUser(res);role(u,['PM','REVIEWER','MEMBER']);
+  if(u.role==='MEMBER'){const scope=await one(db,'SELECT 1 FROM sub_projects WHERE owner_id=$1 UNION SELECT 1 FROM tasks WHERE sub_project_id IS NOT NULL AND created_by=$1 LIMIT 1',[u.id]);if(!scope)throw new HttpError(403,'Review is available to sub-project owners only');}
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
-    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=r.submitted_by WHERE p.manager_id=$1 AND r.review_status='PENDING'`,[u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,sp.name AS sub_project_name,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE (p.manager_id=$1 OR sp.owner_id=$1 OR t.created_by=$1) AND r.review_status='PENDING'`,[u.id]),
     query(db,`SELECT e.id,t.id AS task_id,t.project_id,t.title,t.due_date,'EXTENSION' AS kind,e.created_at AS requested_at,e.reason AS summary,u.full_name AS submitted_by,e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=e.requested_by WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
     query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'REASSIGNMENT' AS kind,r.created_at AS requested_at,r.reason AS summary,u.full_name AS submitted_by,r.work_from,r.work_until,nu.full_name AS new_owner_name FROM reassignments r JOIN tasks t ON t.id=r.task_id JOIN users u ON u.id=r.requested_by JOIN users nu ON nu.id=r.new_owner_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_APPROVAL' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_RESOLVE' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.responsible_user_id=$1 AND p.status='OPEN'`,[u.id])
-  ]);send(res,[...results,...extensions,...reassignments,...approvals,...resolutions].sort((a,b)=>String(a.requested_at).localeCompare(String(b.requested_at))));
+  ]);send(res,[...results,...(u.role==='MEMBER'?[]:[...extensions,...reassignments,...approvals,...resolutions])].sort((a,b)=>String(a.requested_at).localeCompare(String(b.requested_at))));
 }));
 api.post('/decisions/undo',handler(async(req,res)=>{
   const u=currentUser(res),d=parse(z.object({kind:z.enum(['RESULT_REVIEW','EXTENSION','REASSIGNMENT','PENDENCY_APPROVAL']),id:z.number().int().positive()}),req.body);
   const table=d.kind==='RESULT_REVIEW'?'task_results':d.kind==='EXTENSION'?'due_date_extensions':d.kind==='REASSIGNMENT'?'reassignments':'pendencies';
   const record=await one<Record<string,unknown>>(db,`SELECT * FROM ${table} WHERE id=$1`,[d.id]);if(!record)throw new HttpError(404,'Decision not found');
-  const task=await taskById(Number(d.kind==='PENDENCY_APPROVAL'?record.blocked_task_id:record.task_id));await projectManager(u,task.project_id);
+  const task=await taskById(Number(d.kind==='PENDENCY_APPROVAL'?record.blocked_task_id:record.task_id));if(d.kind==='RESULT_REVIEW'){if(!canReviewTask(u,task))throw new HttpError(403,'Forbidden');}else await projectManager(u,task.project_id);
   const decidedAt=d.kind==='RESULT_REVIEW'?record.reviewed_at:d.kind==='PENDENCY_APPROVAL'?null:record.decided_at;
   const last=await one<{event_type:string;created_at:string;actor_id:number}>(db,'SELECT event_type,created_at,actor_id FROM task_history WHERE task_id=$1 ORDER BY id DESC LIMIT 1',[task.id]);
   const expected=d.kind==='RESULT_REVIEW'?'RESULT_REVIEWED':d.kind==='EXTENSION'?'EXTENSION_DECIDED':d.kind==='REASSIGNMENT'?'REASSIGNMENT_DECIDED':'PENDENCY_DECIDED';
