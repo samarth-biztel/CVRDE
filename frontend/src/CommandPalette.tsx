@@ -38,7 +38,7 @@ export default function CommandPalette({open,onClose,onNavigate,onTask,projectId
     <CommandList>
       <CommandEmpty>No matching pages or tasks.</CommandEmpty>
       <CommandGroup heading="PAGES">
-        {pages.filter(page=>role==='PM'? !['mine','submissions','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions'].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
+        {pages.filter(page=>role==='PM'? !['mine','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions'].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
       </CommandGroup>
       {!!tasks.data?.length&&<CommandGroup heading="TASKS">
         {tasks.data.map(task=><CommandItem data-testid={`command-task-${task.id}`} key={task.id} value={task.title} onSelect={()=>selectTask(task.id)}>{task.title}<span className="text-xs text-[var(--muted)]">{task.status.replaceAll('_',' ')}</span></CommandItem>)}

@@ -80,7 +80,7 @@ describe('fictional demo workflows', () => {
     expect(open).toBeTruthy();
     expect((await s2.post(`/api/v1/pendencies/${open.id}/resolve`).send({resolution:'Inputs confirmed'})).body.status).toBe('RESOLVED');
     const actions=await s2.get('/api/v1/me/pending-actions');
-    expect(actions.body.some((a:{id:number;kind:string})=>a.id===open.id&&a.kind==='PENDENCY_RESOLVE')).toBe(false);
+    expect(actions.status).toBe(403);
 
     const groups=await pm.get(`/api/v1/projects/${project.id}/groups`);
     const shared=groups.body.find((g:{name:string})=>g.name==='Test programme team');

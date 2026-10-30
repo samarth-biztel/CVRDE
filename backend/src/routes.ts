@@ -258,7 +258,7 @@ api.post('/extension-requests/:requestId/decision',handler(async(req,res)=>{
   const task=await taskById(r.task_id);await projectManager(u,task.project_id);if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
   if(d.approve)await checkProjectDeadline(task.project_id,r.new_due_date);
   const status=d.approve?'APPROVED':'REJECTED';
-  await db.transaction().execute(async tx=>{await query(tx,'UPDATE due_date_extensions SET status=$1,decided_by=$2,decided_at=now() WHERE id=$3',[status,u.id,r.id]);if(d.approve)await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[r.new_due_date,task.id]);await history(tx,task.project_id,task.id,'EXTENSION_DECIDED',u.id,{status,new_due_date:r.new_due_date,comment:d.comment});});
+  await db.transaction().execute(async tx=>{await query(tx,'UPDATE due_date_extensions SET status=$1,decided_by=$2,decided_at=now(),decision_comment=$3 WHERE id=$4',[status,u.id,d.comment,r.id]);if(d.approve)await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[r.new_due_date,task.id]);await history(tx,task.project_id,task.id,'EXTENSION_DECIDED',u.id,{status,new_due_date:r.new_due_date,comment:d.comment});});
   await notify('REQUEST_ANSWERED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});
 }));
 api.get('/tasks/:taskId/extensions',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM due_date_extensions WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
@@ -307,7 +307,7 @@ api.post('/reassignments/:requestId/decision',handler(async(req,res)=>{
   if(u.id!==r.reviewer_id || (u.role!=='REVIEWER'&&u.id!==task.manager_id))throw new HttpError(403,'Approver only');if(r.status!=='PENDING')throw new HttpError(409,'Already decided');
   if(task.owner_id!==r.original_owner_id)throw new HttpError(409,'Task owner changed since request');
   const status=d.approve?'APPROVED':'REJECTED';
-  await db.transaction().execute(async tx=>{await query(tx,'UPDATE reassignments SET status=$1,decided_at=now() WHERE id=$2',[status,rid]);if(d.approve)await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[r.new_owner_id,task.id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_DECIDED',u.id,{status,old:r.original_owner_id,new:d.approve?r.new_owner_id:r.original_owner_id,comment:d.comment});});
+  await db.transaction().execute(async tx=>{await query(tx,'UPDATE reassignments SET status=$1,decided_at=now(),decided_by=$2,decision_comment=$3 WHERE id=$4',[status,u.id,d.comment,rid]);if(d.approve)await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[r.new_owner_id,task.id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_DECIDED',u.id,{status,old:r.original_owner_id,new:d.approve?r.new_owner_id:r.original_owner_id,comment:d.comment});});
   for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REQUEST_ANSWERED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status,work_from:r.work_from,work_until:r.work_until});
 }));
 api.get('/tasks/:taskId/reassignments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM reassignments WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
@@ -338,8 +338,32 @@ api.post('/pendencies/:pendencyId/resolve',handler(async(req,res)=>{
   await notify('REQUEST_ANSWERED',p.raised_by,task.id,`Prerequisite answered: ${task.title}`,d.resolution);send(res,{status:'RESOLVED'});
 }));
 
+api.get('/me/work',handler(async(req,res)=>{
+  const u=currentUser(res);role(u,['MEMBER']);const pid=id(req.query.project_id);await projectMember(u,pid);
+  const [tasks,activity]=await Promise.all([
+    query(db,`SELECT t.*,u.full_name AS owner_name,(SELECT r.review_comment FROM task_results r WHERE r.task_id=t.id AND r.review_status='RETURNED' ORDER BY r.version_no DESC LIMIT 1) AS return_reason FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 AND t.owner_id=$2 ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id]),
+    query(db,`SELECT * FROM (
+      SELECT c.id,t.id AS task_id,t.title,c.created_at,'COMMENT'::text AS event_type,c.body AS detail,author.full_name AS actor_name FROM task_comments c JOIN tasks t ON t.id=c.task_id JOIN users author ON author.id=c.author_id WHERE t.project_id=$1 AND t.owner_id=$2
+      UNION ALL
+      SELECT h.id,t.id AS task_id,t.title,h.created_at,h.event_type,coalesce(h.details->>'comment',h.details->>'resolution','') AS detail,actor.full_name AS actor_name FROM task_history h JOIN tasks t ON t.id=h.task_id JOIN users actor ON actor.id=h.actor_id WHERE t.project_id=$1 AND t.owner_id=$2 AND h.event_type IN ('STATUS_CHANGED','RESULT_REVIEWED','EXTENSION_DECIDED','REASSIGNMENT_DECIDED','PENDENCY_DECIDED','PENDENCY_RESOLVED')
+    ) events ORDER BY created_at DESC,id DESC LIMIT 10`,[pid,u.id])
+  ]);send(res,{tasks,activity});
+}));
+api.get('/me/submissions',handler(async(_req,res)=>{
+  const u=currentUser(res);role(u,['MEMBER','PM']);
+  send(res,await query(db,`SELECT * FROM (
+    SELECT r.id,r.task_id,t.project_id,t.title,p.name AS project_name,'RESULT'::text AS kind,r.submitted_at AS created_at,r.review_status AS state,r.review_comment AS reviewer_comment,r.work_completed AS summary FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id WHERE r.submitted_by=$1
+    UNION ALL
+    SELECT e.id,e.task_id,t.project_id,t.title,p.name,'EXTENSION',e.created_at,e.status,e.decision_comment,e.reason FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id WHERE e.requested_by=$1
+    UNION ALL
+    SELECT a.id,a.task_id,t.project_id,t.title,p.name,'REASSIGNMENT',a.created_at,a.status,a.decision_comment,a.reason FROM reassignments a JOIN tasks t ON t.id=a.task_id JOIN projects p ON p.id=t.project_id WHERE a.requested_by=$1
+    UNION ALL
+    SELECT q.id,q.blocked_task_id,t.project_id,t.title,p.name,'PREREQUISITE',q.created_at,CASE WHEN q.status='AWAITING_APPROVAL' THEN 'PENDING' WHEN q.status='REJECTED' THEN 'REJECTED' ELSE 'APPROVED' END,q.resolution,q.description FROM pendencies q JOIN tasks t ON t.id=q.blocked_task_id JOIN projects p ON p.id=t.project_id WHERE q.raised_by=$1
+  ) submissions ORDER BY created_at DESC,kind,id DESC`,[u.id]));
+}));
+
 api.get('/me/pending-actions',handler(async(_req,res)=>{
-  const u=currentUser(res);
+  const u=currentUser(res);role(u,['PM','REVIEWER']);
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
     query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(array_agg(json_build_object('id',a.id,'name',a.original_name)),'{}') FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=r.submitted_by WHERE p.manager_id=$1 AND r.review_status='PENDING'`,[u.id]),
     query(db,`SELECT e.id,t.id AS task_id,t.project_id,t.title,t.due_date,'EXTENSION' AS kind,e.created_at AS requested_at,e.reason AS summary,u.full_name AS submitted_by,e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=e.requested_by WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
@@ -364,10 +388,10 @@ api.post('/decisions/undo',handler(async(req,res)=>{
       await query(tx,"UPDATE task_results SET review_status='PENDING',review_comment=NULL,reviewed_by=NULL,reviewed_at=NULL WHERE id=$1",[d.id]);await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);
     }else if(d.kind==='EXTENSION'){
       if(record.status==='PENDING'||record.status==='APPROVED'&&String(task.due_date).slice(0,10)!==String(record.new_due_date).slice(0,10))throw new HttpError(409,'Task changed since decision');
-      await query(tx,"UPDATE due_date_extensions SET status='PENDING',decided_by=NULL,decided_at=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[record.old_due_date,task.id]);
+      await query(tx,"UPDATE due_date_extensions SET status='PENDING',decided_by=NULL,decided_at=NULL,decision_comment=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[record.old_due_date,task.id]);
     }else if(d.kind==='REASSIGNMENT'){
       if(record.status==='PENDING'||record.status==='APPROVED'&&task.owner_id!==Number(record.new_owner_id))throw new HttpError(409,'Task changed since decision');
-      await query(tx,"UPDATE reassignments SET status='PENDING',decided_at=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[record.original_owner_id,task.id]);
+      await query(tx,"UPDATE reassignments SET status='PENDING',decided_at=NULL,decided_by=NULL,decision_comment=NULL WHERE id=$1",[d.id]);if(record.status==='APPROVED')await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[record.original_owner_id,task.id]);
     }else{
       if(!['OPEN','REJECTED'].includes(String(record.status)))throw new HttpError(409,'Prerequisite changed since decision');
       await query(tx,"UPDATE pendencies SET status='AWAITING_APPROVAL',resolution=NULL WHERE id=$1",[d.id]);
