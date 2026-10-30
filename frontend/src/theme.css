@@ -333,3 +333,11 @@ td strong{color:var(--text)}
 .sub-project-detail>h3:last-of-type{margin-top:24px}
 @media(max-width:900px){.sub-project-row{grid-template-columns:1fr 1fr}.sub-project-row span:last-child{white-space:normal}}
 @media(max-width:600px){.sub-project-row{grid-template-columns:1fr}.sub-projects-heading,.sub-project-detail-head,.sub-project-tasks-head{align-items:flex-start}.sub-project-facts{display:grid;gap:12px}}
+
+.evidence-list{list-style:none;margin:10px 0 14px;padding:0;border:1px solid var(--border);background:var(--surface)}
+.evidence-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;font-size:.78rem}
+.evidence-list li+li{border-top:1px solid var(--border)}
+.evidence-list small{color:var(--muted);white-space:nowrap}
+.evidence-hint{display:block;margin:7px 0 0;color:var(--muted);font-size:.72rem}
+.submit-header-action{display:grid;justify-items:start}
+@media(max-width:600px){.evidence-list li{display:grid}.evidence-list small{white-space:normal}}

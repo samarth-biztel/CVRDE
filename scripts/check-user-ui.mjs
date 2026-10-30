@@ -3,6 +3,7 @@ import {chromium,request} from 'playwright';
 
 const origin=process.env.CVRDE_UI_URL||'https://localhost';
 const api=await request.newContext({baseURL:origin,ignoreHTTPSErrors:true});
+const ownerApi=await request.newContext({baseURL:origin,ignoreHTTPSErrors:true});
 const browser=await chromium.launch({headless:true});
 try{
   assert.equal((await api.post('/api/v1/auth/login',{data:{username:'pm.demo',password:'CVRDE-Demo-2026!'}})).status(),200);
@@ -12,6 +13,8 @@ try{
   const project=(await (await api.get('/api/v1/projects')).json()).find(p=>p.name.includes('Engine Component Development'));assert.ok(project);
   const material=(await (await api.get(`/api/v1/projects/${project.id}/tasks`)).json()).find(t=>t.title==='Material sample testing');assert.ok(material);
   assert.equal((await api.post(`/api/v1/tasks/${material.id}/comments`,{data:{body:'Please check the latest sample notes'}})).status(),201);
+  assert.equal((await ownerApi.post('/api/v1/auth/login',{data:{username:'scientist1.demo',password:'CVRDE-Demo-2026!'}})).status(),200);
+  const sampleFile=await ownerApi.post(`/api/v1/tasks/${material.id}/attachments`,{multipart:{document_key:'sample-results',file:{name:'sample-results.txt',mimeType:'text/plain',buffer:Buffer.from('Sample results')}}});assert.equal(sampleFile.status(),201);
 
   const second=await browser.newPage({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
   await second.goto(origin);
@@ -44,6 +47,8 @@ try{
   const startRow=first.locator('.work-task-row').filter({hasText:'Fatigue test setup'});
   await startRow.getByRole('button',{name:'Start',exact:true}).click();
   await first.getByText('Task started').waitFor();
+  await startRow.getByRole('button',{name:'Submit for review'}).waitFor();
+  assert.equal(await startRow.getByRole('button',{name:'Submit for review'}).isDisabled(),true);
   await first.getByTestId('nav-tasks').click();
   await first.getByRole('button',{name:'My tasks',exact:true}).waitFor();
   const row=first.locator('.workspace-table tbody tr').filter({hasText:'Material sample testing'});
@@ -55,4 +60,4 @@ try{
   await first.getByText('Sample tests completed for review').waitFor();
   await first.getByText('Pending',{exact:true}).first().waitFor();
   console.log('User UI check passed: landing, returned reason, owner-only lists, inline actions, shared view, submissions, read-only project, and Review URL.');
-}finally{await api.dispose();await browser.close()}
+}finally{await Promise.all([api.dispose(),ownerApi.dispose()]);await browser.close()}

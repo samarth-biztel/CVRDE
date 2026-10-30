@@ -64,8 +64,8 @@ try{
     await task('Failure mode review',ids['scientist1.demo'],35,'NOT_STARTED','HIGH',parent);
     await task('Prototype inspection plan',ids['scientist1.demo'],9,'IN_PROGRESS','LOW');
     await task('Final evidence package',ids['scientist2.demo'],45,'NOT_STARTED','MEDIUM',parent);
-    await query(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,1,$2,$3,$4)',[instrumentation,'Reviewed channel map and sensor locations','Ready for manager review',ids['scientist2.demo']]);
-    await query(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now())",[safety,'Safety checks done','Test cell cleared',ids['scientist1.demo'],ids['pm.demo']]);
+    const instrumentationResult=await one<{id:number}>(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,1,$2,$3,$4) RETURNING id',[instrumentation,'Reviewed channel map and sensor locations','Ready for manager review',ids['scientist2.demo']]);
+    const safetyResult=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now()) RETURNING id",[safety,'Safety checks done','Test cell cleared',ids['scientist1.demo'],ids['pm.demo']]);
     for(const [taskId,author,body] of [
       [calibration,ids['scientist1.demo'],'Calibration sequence started; awaiting cross-check of the thermal channel.'],
       [instrumentation,ids['scientist2.demo'],'Updated channel map attached to the review package.'],
@@ -86,6 +86,8 @@ try{
     async function attachment(name:string,data:Uint8Array,mime:string,key:string,taskId:number|null,resultId:number|null,version:number){await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[pid,taskId,resultId,key,version,name,randomUUID(),mime,data.length,taskId?ids['scientist2.demo']:ids['pm.demo'],Buffer.from(data)]);}
     await attachment('thermal_results.xlsx',xlsx('Thermal results version 1'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`task:${report}:thermal_results`,report,v1!.id,1);
     await attachment('thermal_results.xlsx',xlsx('Thermal results version 2'),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`task:${report}:thermal_results`,report,v2!.id,2);
+    await attachment('instrumentation_channel_map.txt',strToU8('Verified sensor channel map'),'text/plain',`task:${instrumentation}:channel_map`,instrumentation,instrumentationResult!.id,1);
+    await attachment('safety_checklist.txt',strToU8('Completed test cell safety checks'),'text/plain',`task:${safety}:checklist`,safety,safetyResult!.id,1);
     await attachment('review_notes.pdf',pdf('Demo drawing review notes'),'application/pdf',`task:${drawing}:review_notes`,drawing,accepted!.id,1);
     await attachment('Kick-off meeting minutes.docx',docx('Fictional kick-off meeting minutes version 1'),'application/vnd.openxmlformats-officedocument.wordprocessingml.document','project:meeting_minutes',null,null,1);
     await attachment('Kick-off meeting minutes.docx',docx('Fictional kick-off meeting minutes version 2'),'application/vnd.openxmlformats-officedocument.wordprocessingml.document','project:meeting_minutes',null,null,2);

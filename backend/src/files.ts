@@ -39,14 +39,13 @@ function validateFile(data:Buffer,name:string){
     if(data.includes(0))throw new HttpError(400,'Text file contains binary data');
   }
 }
-const input=z.object({document_key:z.string().trim().min(1).max(100),result_id:z.coerce.number().int().positive().optional()});
+const input=z.object({document_key:z.string().trim().min(1).max(100)}).strict();
 fileRoutes.post('/tasks/:taskId/attachments',upload.single('file'),handler(async(req,res)=>{
   const file=req.file;if(!file)throw new HttpError(400,'Allowed file required');
   const user=currentUser(res),task=await taskById(uid(req.params.taskId));if(user.id!==task.owner_id)throw new HttpError(403,'Owner only');
   const data=input.parse(req.body);validateFile(file.buffer,file.originalname);
-  if(data.result_id){const result=await one<{task_id:number}>(db,'SELECT task_id FROM task_results WHERE id=$1',[data.result_id]);if(!result || result.task_id!==task.id)throw new HttpError(400,'Invalid result');}
   const row=await db.transaction().execute(async tx=>{
-    const item=await one<Attachment>(tx,`INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,(SELECT coalesce(max(version_no),0)+1 FROM attachments WHERE project_id=$1 AND document_key=$4),$5,$6,$7,$8,$9,$10) RETURNING id,project_id,task_id,document_key,version_no,original_name,mime_type,size_bytes`,[task.project_id,task.id,data.result_id||null,`task:${task.id}:${data.document_key}`,basename(file.originalname),randomUUID(),mime[extname(file.originalname).toLowerCase()],file.size,user.id,file.buffer]);
+    const item=await one<Attachment>(tx,`INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,NULL,$3,(SELECT coalesce(max(version_no),0)+1 FROM attachments WHERE project_id=$1 AND document_key=$3),$4,$5,$6,$7,$8,$9) RETURNING id,project_id,task_id,document_key,version_no,original_name,mime_type,size_bytes`,[task.project_id,task.id,`task:${task.id}:${data.document_key}`,basename(file.originalname),randomUUID(),mime[extname(file.originalname).toLowerCase()],file.size,user.id,file.buffer]);
     await history(tx,task.project_id,task.id,'ATTACHMENT_UPLOADED',user.id,{attachment_id:item!.id,version_no:item!.version_no});return item;
   });res.status(201).json(row);
 }));

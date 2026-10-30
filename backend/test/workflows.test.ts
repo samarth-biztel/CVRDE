@@ -62,16 +62,20 @@ describe('fictional demo workflows', () => {
     const results=await pm.get(`/api/v1/tasks/${thermal.id}/results`);
     const pending=results.body.find((r:{review_status:string})=>r.review_status==='PENDING');expect(pending).toBeTruthy();
     expect((await pm.post(`/api/v1/results/${pending.id}/review`).send({accept:false,comment:'Please revise'})).body.status).toBe('RETURNED');
-    const revised=await s2.post(`/api/v1/tasks/${thermal.id}/results`).send({work_completed:'Final thermal analysis',outcome:'Ready'});
+    expect((await s2.post(`/api/v1/tasks/${thermal.id}/results`).send({work_completed:'No evidence',outcome:'Ready',attachment_ids:[]})).status).toBe(400);
+    const evidence=await s2.post(`/api/v1/tasks/${thermal.id}/attachments`).field('document_key','final-thermal').attach('file',Buffer.from('Final simulation report'),'final-thermal.txt');
+    expect(evidence.status).toBe(201);
+    const revised=await s2.post(`/api/v1/tasks/${thermal.id}/results`).send({work_completed:'Final thermal analysis',outcome:'Ready',attachment_ids:[evidence.body.id]});
     expect(revised.status).toBe(201);expect(revised.body.version_no).toBe(3);
     expect((await pm.post(`/api/v1/results/${revised.body.id}/review`).send({accept:true,comment:'Accepted'})).body.status).toBe('DONE');
 
-    const files=await pm.get(`/api/v1/tasks/${thermal.id}/attachments`);expect(files.body.length).toBe(2);
-    const downloaded=await s1.get(`/api/v1/attachments/${files.body[0].id}/download`).buffer(true).parse((response,callback)=>{const chunks:Buffer[]=[];response.on('data',(chunk:Buffer)=>chunks.push(chunk));response.on('end',()=>callback(null,Buffer.concat(chunks)));});
+    const files=await pm.get(`/api/v1/tasks/${thermal.id}/attachments`);expect(files.body.length).toBe(3);
+    const earlierFile=files.body.find((f:{original_name:string})=>f.original_name==='thermal_results.xlsx');expect(earlierFile).toBeTruthy();
+    const downloaded=await s1.get(`/api/v1/attachments/${earlierFile.id}/download`).buffer(true).parse((response,callback)=>{const chunks:Buffer[]=[];response.on('data',(chunk:Buffer)=>chunks.push(chunk));response.on('end',()=>callback(null,Buffer.concat(chunks)));});
     expect(downloaded.status).toBe(200);
     expect((await s2.post(`/api/v1/tasks/${thermal.id}/attachments`).field('document_key','invalid').attach('file',Buffer.from('not a PDF'),'invalid.pdf')).status).toBe(400);
     expect((await s2.post(`/api/v1/tasks/${thermal.id}/attachments`).field('document_key','verified-copy').attach('file',downloaded.body,'copy.xlsx')).status).toBe(201);
-    expect((await reviewer.get(`/api/v1/attachments/${files.body[0].id}/download`)).status).toBe(404);
+    expect((await reviewer.get(`/api/v1/attachments/${earlierFile.id}/download`)).status).toBe(404);
     const report=await pm.get(`/api/v1/reports/progress.csv?project_id=${project.id}`);expect(report.status).toBe(200);expect(report.text).toContain('Thermal analysis report');
     expect((await s1.post(`/api/v1/tasks/${thermal.id}/status`).send({status:'COMPLETED'})).status).toBe(403);
 

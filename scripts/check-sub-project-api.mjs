@@ -38,7 +38,9 @@ try{
   assert.equal((await call(owner,`/tasks/${buildTask.id}`,'patch',{description:'Outside scope'})).status(),403);
   assert.equal((await call(other,`/tasks/${buildTask.id}`,'patch',{description:'Edited by its sub-project owner'})).status(),200);
   assert.equal((await call(other,`/tasks/${task.id}/status`,'post',{})).status(),200);
-  const submitted=await call(other,`/tasks/${task.id}/results`,'post',{work_completed:'Simulation complete',outcome:'Report ready',attachment_ids:[]});
+  const file=await other.post(`/api/v1/tasks/${task.id}/attachments`,{multipart:{document_key:'simulation-report',file:{name:'simulation-report.txt',mimeType:'text/plain',buffer:Buffer.from('Simulation results')}}});
+  assert.equal(file.status(),201,await file.text());
+  const submitted=await call(other,`/tasks/${task.id}/results`,'post',{work_completed:'Simulation complete',outcome:'Report ready',attachment_ids:[(await file.json()).id]});
   assert.equal(submitted.status(),201,await submitted.text());
   const result=await submitted.json();
   assert.equal((await call(pm,`/results/${result.id}/review`,'post',{accept:true,comment:'Approved'})).status(),200);

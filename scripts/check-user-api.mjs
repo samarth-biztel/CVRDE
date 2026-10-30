@@ -28,7 +28,9 @@ try{
   const returnedWork=await (await call(viewer,`/me/work?project_id=${project.id}`)).json(),returnedTask=returnedWork.tasks.find(t=>t.id===pending.task_id);
   assert.equal(returnedTask.status,'RETURNED');assert.equal(returnedTask.return_reason,'Please revise the channel map');
   assert.ok((await (await call(viewer,'/me/submissions')).json()).some(s=>s.task_id===pending.task_id&&s.state==='RETURNED'&&s.reviewer_comment==='Please revise the channel map'));
-  const resubmitted=await call(viewer,`/tasks/${pending.task_id}/results`,'post',{work_completed:'Revised channel map',outcome:'Revised channel map',attachment_ids:[]});assert.equal(resubmitted.status(),201,await resubmitted.text());
+  assert.equal((await call(viewer,`/tasks/${pending.task_id}/results`,'post',{work_completed:'No file',outcome:'No file',attachment_ids:[]})).status(),400);
+  const revisedFile=await viewer.post(`/api/v1/tasks/${pending.task_id}/attachments`,{multipart:{document_key:'revised-channel-map',file:{name:'revised-channel-map.txt',mimeType:'text/plain',buffer:Buffer.from('Revised channel map')}}});assert.equal(revisedFile.status(),201);
+  const resubmitted=await call(viewer,`/tasks/${pending.task_id}/results`,'post',{work_completed:'Revised channel map',outcome:'Revised channel map',attachment_ids:[(await revisedFile.json()).id]});assert.equal(resubmitted.status(),201,await resubmitted.text());
   assert.ok((await (await call(viewer,'/me/submissions')).json()).some(s=>s.task_id===pending.task_id&&s.state==='PENDING'&&s.summary==='Revised channel map'));
   const extensions=(await (await call(pm,'/me/pending-actions')).json()).filter(a=>a.kind==='EXTENSION');
   const approved=extensions.find(a=>a.title==='Material sample testing'),declined=extensions.find(a=>a.title==='Sensor calibration records');assert.ok(approved&&declined);
