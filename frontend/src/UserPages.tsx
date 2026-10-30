@@ -49,7 +49,7 @@ export function UserHome({projectId,onTask,onSubmissions,run}:{projectId:number|
 export function UserTasks({user,projectId,onTask,run}:{user:User;projectId:number|null;onTask:(id:number)=>void;run:Run}){
   const [tab,setTab]=useState<'mine'|'shared'>('mine');
   const tasks=useQuery({queryKey:['tasks',projectId],queryFn:()=>api<Task[]>(`/projects/${projectId}/tasks`),enabled:!!projectId});
-  const mine=(tasks.data||[]).filter(t=>t.owner_id===user.id),shared=(tasks.data||[]).filter(t=>t.owner_id!==user.id&&t.visibility==='GROUP');
+  const mine=(tasks.data||[]).filter(t=>t.owner_id===user.id),shared=(tasks.data||[]).filter(t=>t.owner_id!==user.id&&(t.visibility==='GROUP'||!!t.sub_project_id));
   return <><div className="pm-tabs"><button className={tab==='mine'?'active':''} onClick={()=>setTab('mine')}>My tasks</button><button className={tab==='shared'?'active':''} onClick={()=>setTab('shared')}>Shared with me</button></div><section className={'card'+(tab==='shared'?' shared-task-table':'')}><h2>{tab==='mine'?'My tasks':'Shared with me'}</h2>{tab==='shared'&&<p className="muted">Shared tasks are available to view and comment on. The owner handles status and submission.</p>}<WorkspaceTaskTable tasks={tab==='mine'?mine:shared} onTask={onTask} renderActions={tab==='mine'?task=><WorkTaskAction task={task} run={run}/>:undefined}/></section></>;
 }
 export function MySubmissions({onTask}:{onTask:(taskId:number,projectId:number)=>void}){

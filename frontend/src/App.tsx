@@ -63,7 +63,7 @@ function App(){
     {message&&<div className="notice success">{message}</div>}{error&&<div className="notice error">{error}</div>}
     {screen==='overview'&&user.role==='PM'&&<PMOverview user={user} projectId={projectId} onTask={showTask} onTasks={goFilteredTasks} onReview={()=>go('pending')} onSubmissions={()=>go('submissions')}/>}
     {screen==='mine'&&user.role==='MEMBER'&&<UserHome projectId={projectId} onTask={showTask} onSubmissions={()=>go('submissions')} run={run}/>}
-    {screen==='projects'&&<PMProjects user={user} projectId={projectId} onProject={setProjectId} onTasks={()=>goFilteredTasks('')} run={run}/>}
+    {screen==='projects'&&<PMProjects user={user} projectId={projectId} onProject={setProjectId} onTasks={()=>goFilteredTasks('')} onTask={showTask} run={run}/>}
     {screen==='tasks'&&(user.role==='PM'?<PMTasks user={user} projectId={projectId} onTask={showTask} run={run} initialFilter={taskFilter}/>:user.role==='MEMBER'?<UserTasks user={user} projectId={projectId} onTask={showTask} run={run}/>:<WorkspaceTasks user={user} projectId={projectId} onProject={setProjectId} onTask={showTask} run={run}/>)}
     {screen==='task'&&taskId&&<WorkspaceTaskDetail user={user} taskId={taskId} onBack={()=>go('tasks')} onTask={showTask} run={run}/>}
     {screen==='submissions'&&['PM','MEMBER'].includes(user.role)&&<MySubmissions onTask={showSubmittedTask}/>}

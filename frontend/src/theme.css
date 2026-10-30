@@ -313,3 +313,23 @@ td strong{color:var(--text)}
 .pm-row-edit-fields select,.pm-row-edit-fields input[type=date]{width:100%}
 @media(max-width:900px){.pm-overview-grid{grid-template-columns:1fr;grid-template-areas:"decision" "risk" "workload" "progress" "mytasks"}.project-summary-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.project-detail-head{display:grid}.project-detail-actions{flex-wrap:wrap}.project-summary-meta{grid-template-columns:1fr 1fr}.pm-bulk-toolbar select,.pm-bulk-toolbar input[type=date]{width:100%}}
+
+.sub-projects{margin:24px 0;padding:22px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.sub-projects-heading,.sub-project-detail-head,.sub-project-tasks-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.sub-projects-heading h3,.sub-project-detail-head h3,.sub-project-tasks-head h3{margin:0 0 14px;padding:0;border:0}
+.sub-project-list{display:grid;gap:8px}
+.sub-project-row{display:grid;grid-template-columns:minmax(180px,1.6fr) minmax(120px,1fr) minmax(160px,1fr) auto;align-items:center;gap:16px;width:100%;padding:14px;text-align:left;border:1px solid var(--border);background:var(--surface);font-size:.8rem}
+.sub-project-row:hover,.sub-project-row.active{background:var(--accent-soft);border-color:var(--accent)}
+.sub-project-row:disabled{opacity:.75;cursor:default}
+.sub-project-row strong{font-size:.84rem}.sub-project-row span:last-child{white-space:nowrap}
+.sub-project-detail{margin-top:20px;padding:20px;border:1px solid var(--border);background:var(--subtle)}
+.sub-project-detail-head p{margin:0 0 12px}
+.sub-project-facts{display:flex;gap:22px;flex-wrap:wrap;font-size:.78rem}
+.sub-project-facts strong{display:block;margin-top:4px}
+.sub-project-detail progress{display:block;width:100%;height:8px;margin:18px 0 24px;accent-color:var(--accent)}
+.sub-project-form{margin:14px 0 20px;padding:18px;border:1px solid var(--border);background:var(--surface)}
+.sub-project-form label small{display:block;color:var(--muted);font-weight:400}
+.sub-project-detail .table-filters{margin-top:8px}
+.sub-project-detail>h3:last-of-type{margin-top:24px}
+@media(max-width:900px){.sub-project-row{grid-template-columns:1fr 1fr}.sub-project-row span:last-child{white-space:normal}}
+@media(max-width:600px){.sub-project-row{grid-template-columns:1fr}.sub-projects-heading,.sub-project-detail-head,.sub-project-tasks-head{align-items:flex-start}.sub-project-facts{display:grid;gap:12px}}
