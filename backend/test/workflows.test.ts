@@ -28,7 +28,12 @@ describe('fictional demo workflows', () => {
     expect((await s1.get(`/api/v1/tasks/${thermal.id}`)).status).toBe(200);
     expect((await s1.get(`/api/v1/tasks/${drawing.id}`)).status).toBe(404);
     expect((await s2.get(`/api/v1/tasks/${material.id}`)).status).toBe(200);
-    expect((await s2.get(`/api/v1/tasks/${material.id}/results`)).status).toBe(403);
+    expect((await s2.get(`/api/v1/tasks/${material.id}/results`)).status).toBe(200);
+    expect((await s2.post(`/api/v1/tasks/${material.id}/status`).send({})).status).toBe(403);
+    expect((await s2.post(`/api/v1/tasks/${material.id}/progress`).send({percent:50,justification:'Viewer edit'})).status).toBe(403);
+    expect((await s2.patch(`/api/v1/tasks/${material.id}`).send({title:'Viewer edit'})).status).toBe(404);
+    expect((await s1.post(`/api/v1/tasks/${material.id}/progress`).send({percent:50})).status).toBe(400);
+    expect((await s1.post(`/api/v1/tasks/${material.id}/progress`).send({percent:50,justification:'Half the samples tested'})).status).toBe(200);
     expect((await reviewer.get(`/api/v1/tasks/${drawing.id}`)).status).toBe(404);
     const dashboard=await pm.get(`/api/v1/projects/${project.id}/dashboard`);
     expect(dashboard.body.total).toBe(17);expect(dashboard.body.overdue).toBe(2);
@@ -55,10 +60,10 @@ describe('fictional demo workflows', () => {
 
     const results=await pm.get(`/api/v1/tasks/${thermal.id}/results`);
     const pending=results.body.find((r:{review_status:string})=>r.review_status==='PENDING');expect(pending).toBeTruthy();
-    expect((await pm.post(`/api/v1/results/${pending.id}/review`).send({accept:false,comment:'Please revise'})).body.status).toBe('IN_PROGRESS');
+    expect((await pm.post(`/api/v1/results/${pending.id}/review`).send({accept:false,comment:'Please revise'})).body.status).toBe('RETURNED');
     const revised=await s2.post(`/api/v1/tasks/${thermal.id}/results`).send({work_completed:'Final thermal analysis',outcome:'Ready'});
     expect(revised.status).toBe(201);expect(revised.body.version_no).toBe(3);
-    expect((await pm.post(`/api/v1/results/${revised.body.id}/review`).send({accept:true,comment:'Accepted'})).body.status).toBe('COMPLETED');
+    expect((await pm.post(`/api/v1/results/${revised.body.id}/review`).send({accept:true,comment:'Accepted'})).body.status).toBe('DONE');
 
     const files=await pm.get(`/api/v1/tasks/${thermal.id}/attachments`);expect(files.body.length).toBe(2);
     const downloaded=await s1.get(`/api/v1/attachments/${files.body[0].id}/download`).buffer(true).parse((response,callback)=>{const chunks:Buffer[]=[];response.on('data',(chunk:Buffer)=>chunks.push(chunk));response.on('end',()=>callback(null,Buffer.concat(chunks)));});

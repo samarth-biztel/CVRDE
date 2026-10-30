@@ -1,4 +1,18 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cvrde
+      POSTGRES_USER: cvrde
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cvrde -d cvrde"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -21,7 +35,7 @@ services:
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      DATABASE_URL: postgresql://cvrde:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/cvrde
       APP_ORIGIN: https://${DOMAIN:?set DOMAIN}
       COOKIE_SECURE: "true"
       UPLOAD_DIR: /data/uploads
@@ -36,7 +50,11 @@ services:
       DEMO_EMAIL_REVIEWER: ${DEMO_EMAIL_REVIEWER:-}
     volumes:
       - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
+  postgres_data:
   uploads:
   caddy_data:
   caddy_config:

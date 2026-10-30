@@ -1,7 +1,16 @@
 {$DOMAIN} {
+  tls internal
   encode zstd gzip
-  request_body { max_size 22MB }
-  handle /api/* { reverse_proxy api:3001 }
-  handle /health { reverse_proxy api:3001 }
-  handle { reverse_proxy web:80 }
+  request_body {
+    max_size 22MB
+  }
+  handle /api/* {
+    reverse_proxy api:3001
+  }
+  handle /health {
+    reverse_proxy api:3001
+  }
+  handle {
+    reverse_proxy web:80
+  }
 }

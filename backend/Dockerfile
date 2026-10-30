@@ -18,4 +18,4 @@ COPY --from=build /app/backend/migrations backend/migrations
 WORKDIR /app/backend
 ENV NODE_ENV=production PORT=3001 UPLOAD_DIR=/data/uploads COOKIE_SECURE=true
 EXPOSE 3001
-CMD ["node","dist/server.js"]
+CMD ["sh","-c","node dist/migrate.js && node dist/server.js"]

@@ -4,7 +4,7 @@ import { db, one, query, type Executor } from './db.js';
 import nodemailer from 'nodemailer';
 
 export type User = { id: number; username: string; full_name: string; email: string; role: 'PM' | 'MEMBER' | 'REVIEWER' };
-export type Task = { id: number; project_id: number; parent_task_id: number | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null };
+export type Task = { id: number; project_id: number; parent_task_id: number | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
 export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 export const assert = (value: unknown, status: number, message: string): asserts value => { if (!value) throw new HttpError(status, message); };
 export const uid = (value: unknown) => { const n = Number(value); if (!Number.isSafeInteger(n) || n <= 0) throw new HttpError(400, 'Invalid ID'); return n; };
@@ -58,10 +58,7 @@ export async function taskAccess(user: User, task: Task, action: Action): Promis
     const permission = await one<{ can_view_results:boolean; can_comment:boolean; can_link_pendency:boolean }>(db,
       'SELECT g.can_view_results,g.can_comment,g.can_link_pendency FROM project_groups g JOIN group_members gm ON gm.group_id=g.id WHERE g.id=$1 AND gm.user_id=$2',[task.group_id,user.id]);
     if (permission) {
-      if (action === 'EDIT') throw new HttpError(403,'Task is read only');
-      if (action === 'RESULTS' && !permission.can_view_results) throw new HttpError(403,'Results access denied');
-      if (action === 'COMMENT' && !permission.can_comment) throw new HttpError(403,'Comment access denied');
-      if (action === 'LINK' && !permission.can_link_pendency) throw new HttpError(403,'Pendency linking denied');
+      if (action === 'EDIT' || action === 'LINK') throw new HttpError(403,'Task is read only');
       return 'FULL';
     }
   }
@@ -81,6 +78,7 @@ export async function visibleTaskIds(user: User, projectId: number): Promise<num
 }
 export async function history(executor: Executor, projectId:number, taskId:number|null, eventType:string, actorId:number, details:unknown) {
   await query(executor,'INSERT INTO task_history(project_id,task_id,event_type,actor_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[projectId,taskId,eventType,actorId,JSON.stringify(details)]);
+  await query(executor,'INSERT INTO audit_log(project_id,task_id,action,actor_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[projectId,taskId,eventType,actorId,JSON.stringify(details)]);
 }
 export async function notify(eventType:string, toUserId:number, taskId:number|null, subject:string, body:string) {
   try {

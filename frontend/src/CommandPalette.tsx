@@ -14,8 +14,10 @@ type Props={
 };
 const pages=[
   {name:'Overview',screen:'overview'},
+  {name:'My work',screen:'mine'},
   {name:'Projects',screen:'projects'},
   {name:'Tasks',screen:'tasks'},
+  {name:'My submissions',screen:'submissions'},
   {name:'Review',screen:'pending'},
   {name:'Reports',screen:'reports'},
   {name:'Settings',screen:'settings'}
@@ -35,7 +37,7 @@ export default function CommandPalette({open,onClose,onNavigate,onTask,projectId
     <CommandList>
       <CommandEmpty>No matching pages or tasks.</CommandEmpty>
       <CommandGroup heading="PAGES">
-        {pages.filter(page=>role==='PM'||!['reports','settings'].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
+        {pages.filter(page=>role==='PM'? !['mine','submissions'].includes(page.screen):role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions'].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
       </CommandGroup>
       {!!tasks.data?.length&&<CommandGroup heading="TASKS">
         {tasks.data.map(task=><CommandItem data-testid={`command-task-${task.id}`} key={task.id} value={task.title} onSelect={()=>selectTask(task.id)}>{task.title}<span className="text-xs text-[var(--muted)]">{task.status.replaceAll('_',' ')}</span></CommandItem>)}

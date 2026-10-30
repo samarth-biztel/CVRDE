@@ -48,23 +48,23 @@ try{
     async function task(title:string,owner:number,due:number,status:string,priority:string,parent:number|null=null,group:number|null=null){const row=await one<{id:number}>(tx,`INSERT INTO tasks(project_id,parent_task_id,title,description,owner_id,priority,due_date,status,visibility,group_id,created_by,plm_ref) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,[pid,parent,title,`Demo task: ${title}`,owner,priority,day(due),status,group?'GROUP':'PRIVATE',group,ids['pm.demo'],'DEMO-PLM-001']);await history(tx,pid,row!.id,'TASK_CREATED',ids['pm.demo'],{title,owner_id:owner});return row!.id;}
     const parent=await task('Component test programme',ids['scientist1.demo'],30,'IN_PROGRESS','MEDIUM');
     const calibration=await task('Test rig calibration',ids['scientist1.demo'],10,'IN_PROGRESS','MEDIUM',parent);
-    await task('Fatigue test setup',ids['scientist1.demo'],20,'NEW','MEDIUM',parent);
+    await task('Fatigue test setup',ids['scientist1.demo'],20,'NOT_STARTED','MEDIUM',parent);
     const sample=await task('Material sample testing',ids['scientist1.demo'],-5,'IN_PROGRESS','HIGH',null,thermal!.id);
     const report=await task('Thermal analysis report',ids['scientist2.demo'],12,'SUBMITTED','HIGH',null,test!.id);
-    const drawing=await task('Component drawing review',ids['scientist2.demo'],-10,'COMPLETED','LOW');
+    const drawing=await task('Component drawing review',ids['scientist2.demo'],-10,'DONE','LOW');
     const instrumentation=await task('Instrumentation readiness review',ids['scientist2.demo'],4,'SUBMITTED','HIGH',parent,test!.id);
     const sensor=await task('Sensor calibration records',ids['scientist2.demo'],-2,'IN_PROGRESS','HIGH',instrumentation,thermal!.id);
-    const vibration=await task('Vibration test matrix',ids['scientist1.demo'],14,'NEW','MEDIUM',parent,test!.id);
+    const vibration=await task('Vibration test matrix',ids['scientist1.demo'],14,'NOT_STARTED','MEDIUM',parent,test!.id);
     const coupon=await task('Coupon batch traceability',ids['scientist1.demo'],6,'IN_PROGRESS','MEDIUM',parent);
-    const fixture=await task('Fixture drawing release',ids['scientist2.demo'],22,'NEW','LOW');
-    const safety=await task('Test cell safety checklist',ids['scientist1.demo'],-3,'COMPLETED','HIGH',parent);
-    await task('Thermal soak procedure',ids['scientist2.demo'],18,'NEW','MEDIUM',parent,thermal!.id);
+    const fixture=await task('Fixture drawing release',ids['scientist2.demo'],22,'NOT_STARTED','LOW');
+    const safety=await task('Test cell safety checklist',ids['scientist1.demo'],-3,'DONE','HIGH',parent);
+    await task('Thermal soak procedure',ids['scientist2.demo'],18,'NOT_STARTED','MEDIUM',parent,thermal!.id);
     await task('Load case correlation',ids['scientist2.demo'],26,'IN_PROGRESS','MEDIUM',null,test!.id);
-    await task('Failure mode review',ids['scientist1.demo'],35,'NEW','HIGH',parent);
+    await task('Failure mode review',ids['scientist1.demo'],35,'NOT_STARTED','HIGH',parent);
     await task('Prototype inspection plan',ids['scientist1.demo'],9,'IN_PROGRESS','LOW');
-    await task('Final evidence package',ids['scientist2.demo'],45,'NEW','MEDIUM',parent);
+    await task('Final evidence package',ids['scientist2.demo'],45,'NOT_STARTED','MEDIUM',parent);
     await query(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,1,$2,$3,$4)',[instrumentation,'Reviewed channel map and sensor locations','Ready for manager review',ids['scientist2.demo']]);
-    await query(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now())",[safety,'Safety checks completed','Test cell cleared',ids['scientist1.demo'],ids['pm.demo']]);
+    await query(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now())",[safety,'Safety checks done','Test cell cleared',ids['scientist1.demo'],ids['pm.demo']]);
     for(const [taskId,author,body] of [
       [calibration,ids['scientist1.demo'],'Calibration sequence started; awaiting cross-check of the thermal channel.'],
       [instrumentation,ids['scientist2.demo'],'Updated channel map attached to the review package.'],
@@ -79,7 +79,7 @@ try{
     await query(tx,'INSERT INTO due_date_extensions(task_id,requested_by,old_due_date,new_due_date,reason) VALUES($1,$2,$3,$4,$5)',[sample,ids['scientist1.demo'],day(-5),day(7),'Awaiting additional test material']);
     const p=await one<{id:number}>(tx,`INSERT INTO pendencies(raised_by,blocked_task_id,responsible_user_id,type,description,needs_approval,approver_id,status) VALUES($1,$2,$3,'CLARIFICATION',$4,false,$5,'OPEN') RETURNING id`,[ids['scientist1.demo'],calibration,ids['scientist2.demo'],'Confirm thermal analysis inputs',ids['pm.demo']]);
     await query(tx,'INSERT INTO pendency_dependencies(pendency_id,depends_on_task_id) VALUES($1,$2)',[p!.id,report]);
-    const v1=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at,review_comment) VALUES($1,1,$2,$3,$4,'RETURNED',$5,now(),$6) RETURNING id",[report,'Initial thermal model','First pass completed',ids['scientist2.demo'],ids['pm.demo'],'Revise assumptions']);
+    const v1=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at,review_comment) VALUES($1,1,$2,$3,$4,'RETURNED',$5,now(),$6) RETURNING id",[report,'Initial thermal model','First pass done',ids['scientist2.demo'],ids['pm.demo'],'Revise assumptions']);
     const v2=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,2,$2,$3,$4) RETURNING id",[report,'Revised thermal model','Updated values ready for review',ids['scientist2.demo']]);
     const accepted=await one<{id:number}>(tx,"INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,'ACCEPTED',$5,now()) RETURNING id",[drawing,'Drawing checked','Review complete',ids['scientist2.demo'],ids['pm.demo']]);
     async function attachment(name:string,data:Uint8Array,mime:string,key:string,taskId:number|null,resultId:number|null,version:number){await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[pid,taskId,resultId,key,version,name,randomUUID(),mime,data.length,taskId?ids['scientist2.demo']:ids['pm.demo'],Buffer.from(data)]);}

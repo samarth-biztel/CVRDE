@@ -12,7 +12,7 @@ const parse = <T extends z.ZodTypeAny>(schema:T,value:unknown):z.infer<T> => sch
 const id = (value:unknown) => uid(value);
 const send = (res:import('express').Response,value:unknown,status=200) => res.status(status).json(value);
 const nonempty = z.string().trim().min(1).max(5000);
-const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
+const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),expected_deliverables:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
 async function checkProjectDeadline(projectId:number,dueDate:string|null|undefined){
   if(!dueDate)return;
   const project=await one<{target_date:string|null}>(db,'SELECT target_date FROM projects WHERE id=$1',[projectId]);
@@ -104,7 +104,7 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   let parent:Task|undefined;
   if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid)throw new HttpError(400,'Parent must belong to project');}
   const task=await db.transaction().execute(async tx=>{
-    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,parent_task_id,title,description,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'NEW',$8,$9,$10,$11) RETURNING *`,[pid,d.parent_task_id || null,d.title,d.description,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
+    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'NOT_STARTED',$9,$10,$11,$12) RETURNING *`,[pid,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
   });
   await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Project ${pid}: ${task.title}`);
@@ -112,15 +112,36 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
 }));
 api.get('/tasks/:taskId',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId)),access=await taskAccess(u,task,'VIEW');
-  send(res,access==='LIMITED'?{id:task.id,title:task.title,status:task.status,limited:true}:task);
+  if(access==='LIMITED')return send(res,{id:task.id,title:task.title,status:task.status,limited:true});
+  const [people,project,subtasks]=await Promise.all([
+    query<{id:number;full_name:string}>(db,'SELECT id,full_name FROM users WHERE id=ANY($1::bigint[])',[[task.owner_id,task.manager_id,task.created_by]]),
+    getProject(task.project_id),
+    query<{total:number;done:number}>(db,"SELECT count(*)::int AS total,count(*) FILTER (WHERE status='DONE')::int AS done FROM tasks WHERE parent_task_id=$1",[task.id])
+  ]);
+  send(res,{...task,project_name:project.name,owner_name:people.find(p=>p.id===task.owner_id)?.full_name,assigned_by_name:people.find(p=>p.id===task.created_by)?.full_name,subtask_count:subtasks[0]});
+}));
+api.get('/tasks/:taskId/subtasks',handler(async(req,res)=>{
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'VIEW');
+  send(res,await query(db,`SELECT t.id,t.title,t.description,t.owner_id,u.full_name AS owner_name,t.due_date,t.status,t.priority FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.parent_task_id=$1 AND (t.owner_id=$2 OR $2=$3 OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[task.id,u.id,task.manager_id]));
+}));
+api.get('/tasks/:taskId/prerequisites',handler(async(req,res)=>{
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'VIEW');
+  send(res,await query(db,`SELECT p.id,p.description,p.status,p.type,p.responsible_user_id,d.depends_on_task_id,t.title AS depends_on_title,t.status AS depends_on_status,(p.status='OPEN') AS blocked FROM pendencies p JOIN pendency_dependencies d ON d.pendency_id=p.id JOIN tasks t ON t.id=d.depends_on_task_id WHERE p.blocked_task_id=$1 ORDER BY p.created_at,p.id`,[task.id]));
+}));
+api.post('/tasks/:taskId/progress',handler(async(req,res)=>{
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));if(u.id!==task.owner_id)throw new HttpError(403,'Owner only');
+  if(!['IN_PROGRESS','RETURNED'].includes(task.status))throw new HttpError(409,'Start the task before updating progress');
+  const d=parse(z.object({percent:z.number().int().min(0).max(100),justification:z.string().trim().min(1).max(2000)}),req.body);
+  await db.transaction().execute(async tx=>{await query(tx,'UPDATE tasks SET progress_percent=$1,updated_at=now() WHERE id=$2',[d.percent,task.id]);await history(tx,task.project_id,task.id,'PROGRESS_CHANGED',u.id,{old:task.progress_percent,new:d.percent,justification:d.justification});});
+  send(res,{progress_percent:d.percent});
 }));
 api.patch('/tasks/:taskId',handler(async(req,res)=>{
-  const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'EDIT');
-  const d=parse(z.object({title:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),priority:z.enum(['LOW','MEDIUM','HIGH']).optional(),due_date:z.string().date().nullable().optional(),plm_ref:z.string().max(100).nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional()}).strict(),req.body);
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));await projectManager(u,task.project_id);
+  const d=parse(z.object({title:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),expected_deliverables:z.string().max(10000).optional(),priority:z.enum(['LOW','MEDIUM','HIGH']).optional(),due_date:z.string().date().nullable().optional(),plm_ref:z.string().max(100).nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional()}).strict(),req.body);
   if(!Object.keys(d).length)throw new HttpError(400,'No changes');
   await checkProjectDeadline(task.project_id,d.due_date);
   if(d.parent_task_id){const parent=await taskById(d.parent_task_id);if(parent.project_id!==task.project_id || parent.id===task.id)throw new HttpError(400,'Invalid parent');}
-  const allowed=['title','description','priority','due_date','plm_ref','parent_task_id'] as const;
+  const allowed=['title','description','expected_deliverables','priority','due_date','plm_ref','parent_task_id'] as const;
   const updates=Object.entries(d).filter(([k])=>allowed.includes(k as typeof allowed[number]));
   const diff=Object.fromEntries(updates.map(([k,v])=>[k,{old:(task as unknown as Record<string,unknown>)[k],new:v}]));
   const result=await db.transaction().execute(async tx=>{
@@ -132,15 +153,30 @@ api.patch('/tasks/:taskId',handler(async(req,res)=>{
 }));
 api.post('/tasks/:taskId/status',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(task.owner_id!==u.id)throw new HttpError(403,'Owner only');
-  if(task.status!=='NEW')throw new HttpError(409,'Only New can be started');
-  await db.transaction().execute(async tx=>{await query(tx,"UPDATE tasks SET status='IN_PROGRESS',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'STATUS_CHANGED',u.id,{old:'NEW',new:'IN_PROGRESS'});});
+  if(task.status!=='NOT_STARTED')throw new HttpError(409,'Only Not started tasks can be started');
+  await db.transaction().execute(async tx=>{await query(tx,"UPDATE tasks SET status='IN_PROGRESS',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'STATUS_CHANGED',u.id,{old:'NOT_STARTED',new:'IN_PROGRESS'});});
   await notify('STATUS_CHANGED',task.manager_id,task.id,`Task started: ${task.title}`,task.title);send(res,{status:'IN_PROGRESS'});
 }));
 api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'COMMENT');const {body}=parse(z.object({body:nonempty}),req.body);
-  const row=await db.transaction().execute(async tx=>{const item=await one(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3) RETURNING *',[task.id,u.id,body]);await history(tx,task.project_id,task.id,'COMMENT_ADDED',u.id,{comment_id:(item as {id:number}).id});return item;});send(res,row,201);
+  const row=await db.transaction().execute(async tx=>{const item=await one(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3) RETURNING *',[task.id,u.id,body]);await history(tx,task.project_id,task.id,'COMMENT_ADDED',u.id,{comment_id:(item as {id:number}).id});return item;});
+  const mentions=[...body.matchAll(/@([a-z0-9._-]+)/gi)].map(x=>x[1]!.toLowerCase());
+  const mentioned=mentions.length?await query<{id:number}>(db,'SELECT u.id FROM users u JOIN project_members pm ON pm.user_id=u.id WHERE pm.project_id=$1 AND lower(u.username)=ANY($2::text[]) AND u.active',[task.project_id,mentions]):[];
+  for(const recipient of new Set([task.owner_id,task.manager_id,...mentioned.map(x=>x.id)]))if(recipient!==u.id)await notify('COMMENT',recipient,task.id,`New comment: ${task.title}`,body);
+  send(res,row,201);
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
+api.get('/me/notifications',handler(async(_req,res)=>{
+  const u=currentUser(res);send(res,await query(db,'SELECT id,event_type,task_id,subject,sent_at,read_at FROM notification_log WHERE to_user_id=$1 ORDER BY sent_at DESC,id DESC LIMIT 100',[u.id]));
+}));
+api.post('/me/notifications/read-all',handler(async(_req,res)=>{
+  const u=currentUser(res);await query(db,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL',[u.id]);send(res,{ok:true});
+}));
+api.post('/me/notifications/:notificationId/read',handler(async(req,res)=>{
+  const u=currentUser(res),notificationId=id(req.params.notificationId);
+  const row=await one(db,'UPDATE notification_log SET read_at=coalesce(read_at,now()) WHERE id=$1 AND to_user_id=$2 RETURNING id',[notificationId,u.id]);
+  if(!row)throw new HttpError(404,'Notification not found');send(res,{ok:true});
+}));
 
 api.get('/projects/:projectId/groups',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await query(db,`SELECT g.*,array_remove(array_agg(gm.user_id::int),NULL) AS member_ids FROM project_groups g LEFT JOIN group_members gm ON gm.group_id=g.id WHERE g.project_id=$1 GROUP BY g.id ORDER BY g.id`,[pid]));}));
 api.post('/projects/:projectId/groups',handler(async(req,res)=>{
@@ -190,27 +226,29 @@ api.post('/extension-requests/:requestId/decision',handler(async(req,res)=>{
   if(d.approve)await checkProjectDeadline(task.project_id,r.new_due_date);
   const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE due_date_extensions SET status=$1,decided_by=$2,decided_at=now() WHERE id=$3',[status,u.id,r.id]);if(d.approve)await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[r.new_due_date,task.id]);await history(tx,task.project_id,task.id,'EXTENSION_DECIDED',u.id,{status,new_due_date:r.new_due_date,comment:d.comment});});
-  await notify('EXTENSION_DECIDED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});
+  await notify('REQUEST_ANSWERED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});
 }));
 api.get('/tasks/:taskId/extensions',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM due_date_extensions WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
 
 api.post('/tasks/:taskId/results',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(u.id!==task.owner_id)throw new HttpError(403,'Owner only');
-  if(task.status!=='IN_PROGRESS')throw new HttpError(409,'Task must be In Progress');
-  const d=parse(z.object({work_completed:nonempty,outcome:nonempty}),req.body);
+  if(!['IN_PROGRESS','RETURNED'].includes(task.status))throw new HttpError(409,'Task must be In progress or Returned');
+  const d=parse(z.object({work_completed:nonempty,outcome:nonempty,attachment_ids:z.array(z.number().int().positive()).default([])}),req.body);
   const row=await db.transaction().execute(async tx=>{
     const r=await one(tx,`INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,(SELECT coalesce(max(version_no),0)+1 FROM task_results WHERE task_id=$1),$2,$3,$4) RETURNING *`,[task.id,d.work_completed,d.outcome,u.id]);
-    await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'RESULT_SUBMITTED',u.id,{result_id:(r as {id:number}).id,version_no:(r as {version_no:number}).version_no,old:'IN_PROGRESS',new:'SUBMITTED'});return r;
-  });await notify('STATUS_CHANGED',task.manager_id,task.id,`Result submitted: ${task.title}`,d.outcome);send(res,row,201);
+    if(d.attachment_ids.length){const attached=await query(tx,'UPDATE attachments SET result_id=$1 WHERE id=ANY($2::bigint[]) AND task_id=$3 AND result_id IS NULL RETURNING id',[(r as {id:number}).id,d.attachment_ids,task.id]);if(attached.length!==new Set(d.attachment_ids).size)throw new HttpError(400,'Invalid submission files');}
+    await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'RESULT_SUBMITTED',u.id,{result_id:(r as {id:number}).id,version_no:(r as {version_no:number}).version_no,attachment_ids:d.attachment_ids,old:task.status,new:'SUBMITTED'});return r;
+  });await notify('SUBMITTED',task.manager_id,task.id,`Result submitted: ${task.title}`,d.outcome);send(res,row,201);
 }));
-api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,'SELECT * FROM task_results WHERE task_id=$1 ORDER BY version_no DESC',[task.id]));}));
+api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,"SELECT r.*,(SELECT coalesce(array_agg(a.original_name ORDER BY a.id),'{}'::text[]) FROM attachments a WHERE a.result_id=r.id) AS attachment_names FROM task_results r WHERE r.task_id=$1 ORDER BY r.version_no DESC",[task.id]));}));
 api.post('/results/:resultId/review',handler(async(req,res)=>{
   const u=currentUser(res),rid=id(req.params.resultId),d=parse(z.object({accept:z.boolean(),comment:z.string().max(3000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;status:string;review_status:string;submitted_by:number}>(db,'SELECT * FROM task_results WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Result not found');
   const task=await taskById(r.task_id);await projectManager(u,task.project_id);if(task.status!=='SUBMITTED' || r.review_status!=='PENDING')throw new HttpError(409,'Result is not pending review');
-  const review=d.accept?'ACCEPTED':'RETURNED', status=d.accept?'COMPLETED':'IN_PROGRESS';
+  if(!d.accept&&!d.comment.trim())throw new HttpError(400,'A reason is required when returning work');
+  const review=d.accept?'ACCEPTED':'RETURNED', status=d.accept?'DONE':'RETURNED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE task_results SET review_status=$1,review_comment=$2,reviewed_by=$3,reviewed_at=now() WHERE id=$4',[review,d.comment,u.id,rid]);await query(tx,'UPDATE tasks SET status=$1,updated_at=now() WHERE id=$2',[status,task.id]);await history(tx,task.project_id,task.id,'RESULT_REVIEWED',u.id,{result_id:rid,review,comment:d.comment,old:'SUBMITTED',new:status});});
-  await notify('STATUS_CHANGED',r.submitted_by,task.id,`Result ${review.toLowerCase()}: ${task.title}`,d.comment || review);send(res,{review_status:review,status});
+  await notify(review,r.submitted_by,task.id,`Result ${review.toLowerCase()}: ${task.title}`,d.comment || review);send(res,{review_status:review,status});
 }));
 
 api.post('/tasks/:taskId/reassignments',handler(async(req,res)=>{
@@ -236,7 +274,7 @@ api.post('/reassignments/:requestId/decision',handler(async(req,res)=>{
   if(task.owner_id!==r.original_owner_id)throw new HttpError(409,'Task owner changed since request');
   const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE reassignments SET status=$1,decided_at=now() WHERE id=$2',[status,rid]);if(d.approve)await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[r.new_owner_id,task.id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_DECIDED',u.id,{status,old:r.original_owner_id,new:d.approve?r.new_owner_id:r.original_owner_id,comment:d.comment});});
-  for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REASSIGNMENT_DECIDED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status,work_from:r.work_from,work_until:r.work_until});
+  for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REQUEST_ANSWERED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status,work_from:r.work_from,work_until:r.work_until});
 }));
 api.get('/tasks/:taskId/reassignments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM reassignments WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
 
@@ -255,14 +293,14 @@ api.post('/pendencies/:pendencyId/decision',handler(async(req,res)=>{
   const p=await one<{id:number;blocked_task_id:number;raised_by:number;responsible_user_id:number;approver_id:number;status:string}>(db,'SELECT * FROM pendencies WHERE id=$1',[pid]);if(!p)throw new HttpError(404,'Pendency not found');if(u.id!==p.approver_id || p.status!=='AWAITING_APPROVAL')throw new HttpError(409,'No pending approval');
   const task=await taskById(p.blocked_task_id),status=d.approve?'OPEN':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE pendencies SET status=$1,resolution=$2 WHERE id=$3',[status,d.comment || null,pid]);await history(tx,task.project_id,task.id,'PENDENCY_DECIDED',u.id,{pendency_id:pid,status,comment:d.comment});});
-  await notify('PENDENCY_DECIDED',p.raised_by,task.id,`Pendency ${status.toLowerCase()}: ${task.title}`,d.comment || status);if(d.approve)await notify('PENDENCY_OPEN',p.responsible_user_id,task.id,`Pendency assigned: ${task.title}`,d.comment || task.title);send(res,{status});
+  await notify('REQUEST_ANSWERED',p.raised_by,task.id,`Prerequisite ${status.toLowerCase()}: ${task.title}`,d.comment || status);if(d.approve)await notify('PENDENCY_OPEN',p.responsible_user_id,task.id,`Prerequisite assigned: ${task.title}`,d.comment || task.title);send(res,{status});
 }));
 api.post('/pendencies/:pendencyId/resolve',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.pendencyId),d=parse(z.object({resolution:nonempty}),req.body);
   const p=await one<{id:number;blocked_task_id:number;raised_by:number;responsible_user_id:number;status:string}>(db,'SELECT * FROM pendencies WHERE id=$1',[pid]);if(!p)throw new HttpError(404,'Pendency not found');if(u.id!==p.responsible_user_id)throw new HttpError(403,'Responsible user only');if(p.status!=='OPEN')throw new HttpError(409,'Pendency is not open');
   const task=await taskById(p.blocked_task_id);
   await db.transaction().execute(async tx=>{await query(tx,"UPDATE pendencies SET status='RESOLVED',resolution=$1,resolved_at=now() WHERE id=$2",[d.resolution,pid]);await history(tx,task.project_id,task.id,'PENDENCY_RESOLVED',u.id,{pendency_id:pid,resolution:d.resolution});});
-  await notify('PENDENCY_RESOLVED',p.raised_by,task.id,`Pendency resolved: ${task.title}`,d.resolution);send(res,{status:'RESOLVED'});
+  await notify('REQUEST_ANSWERED',p.raised_by,task.id,`Prerequisite answered: ${task.title}`,d.resolution);send(res,{status:'RESOLVED'});
 }));
 
 api.get('/me/pending-actions',handler(async(_req,res)=>{
@@ -287,17 +325,18 @@ api.get('/tasks/:taskId/history.csv',handler(async(req,res)=>{
   const rows=await query(db,'SELECT created_at,event_type,actor_id,details FROM task_history WHERE task_id=$1 ORDER BY created_at,id',[task.id]);res.type('text/csv').attachment(`task-${task.id}-history.csv`).send(csv(rows,['created_at','event_type','actor_id','details']));
 }));
 api.get('/projects/:projectId/activity',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);send(res,await query(db,'SELECT h.*,u.full_name AS actor_name FROM task_history h JOIN users u ON u.id=h.actor_id WHERE h.project_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 100',[pid]));}));
+api.get('/projects/:projectId/audit',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);send(res,await query(db,'SELECT a.*,u.full_name AS actor_name FROM audit_log a JOIN users u ON u.id=a.actor_id WHERE a.project_id=$1 ORDER BY a.created_at DESC,a.id DESC LIMIT 500',[pid]));}));
 api.get('/projects/:projectId/dashboard',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
-  const rows=await query<{status:string;owner_id:number;count:number;overdue_count:number}>(db,`SELECT status,owner_id,count(*)::int AS count,count(*) FILTER(WHERE due_date<current_date AND status<>'COMPLETED')::int AS overdue_count FROM tasks WHERE project_id=$1 GROUP BY status,owner_id`,[pid]);
-  const byStatus:Record<string,number>={NEW:0,IN_PROGRESS:0,SUBMITTED:0,COMPLETED:0},byOwner:Record<string,number>={};let total=0,overdue=0;
+  const rows=await query<{status:string;owner_id:number;count:number;overdue_count:number}>(db,`SELECT status,owner_id,count(*)::int AS count,count(*) FILTER(WHERE due_date<current_date AND status<>'DONE')::int AS overdue_count FROM tasks WHERE project_id=$1 GROUP BY status,owner_id`,[pid]);
+  const byStatus:Record<string,number>={NOT_STARTED:0,IN_PROGRESS:0,SUBMITTED:0,RETURNED:0,DONE:0},byOwner:Record<string,number>={};let total=0,overdue=0;
   for(const r of rows){const n=Number(r.count);total+=n;overdue+=Number(r.overdue_count);byStatus[r.status]=(byStatus[r.status]||0)+n;byOwner[String(r.owner_id)]=(byOwner[String(r.owner_id)]||0)+n;}
-  send(res,{total,overdue,by_status:byStatus,by_owner:byOwner,completed:byStatus.COMPLETED || 0,pending:total-(byStatus.COMPLETED || 0)});
+  send(res,{total,overdue,by_status:byStatus,by_owner:byOwner,completed:byStatus.DONE || 0,pending:total-(byStatus.DONE || 0)});
 }));
 async function report(user:User,kind:'overdue'|'progress',params:Record<string,unknown>){
   role(user,['PM']);const projectId=id(params.project_id);await projectManager(user,projectId);
   const status=typeof params.status==='string'&&params.status?params.status:null,owner=typeof params.owner_id==='string'&&params.owner_id?id(params.owner_id):null;
-  const predicate=kind==='overdue'?"AND t.due_date<current_date AND t.status<>'COMPLETED'":'';
+  const predicate=kind==='overdue'?"AND t.due_date<current_date AND t.status<>'DONE'":'';
   return query(db,`SELECT t.id,t.title,t.status,t.priority,t.due_date,t.owner_id,u.full_name AS owner_name,t.created_at FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 AND ($2::text IS NULL OR t.status=$2) AND ($3::bigint IS NULL OR t.owner_id=$3) ${predicate} ORDER BY t.due_date NULLS LAST,t.id`,[projectId,status,owner]);
 }
 for(const kind of ['overdue','progress'] as const){
