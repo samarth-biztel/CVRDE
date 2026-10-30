@@ -341,3 +341,5 @@ td strong{color:var(--text)}
 .evidence-hint{display:block;margin:7px 0 0;color:var(--muted);font-size:.72rem}
 .submit-header-action{display:grid;justify-items:start}
 @media(max-width:600px){.evidence-list li{display:grid}.evidence-list small{white-space:normal}}
+
+.sub-project-summary{display:grid;gap:6px;padding:12px 0;border-top:1px solid var(--border)}.sub-project-summary strong{font-size:.82rem}.sub-project-summary small,.meeting-source{font-size:.7rem;color:var(--muted)}.sub-project-summary progress{width:100%;height:6px}.meeting-source{color:var(--accent)!important}

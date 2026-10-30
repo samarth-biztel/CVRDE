@@ -12,7 +12,7 @@ const parse = <T extends z.ZodTypeAny>(schema:T,value:unknown):z.infer<T> => sch
 const id = (value:unknown) => uid(value);
 const send = (res:import('express').Response,value:unknown,status=200) => res.status(status).json(value);
 const nonempty = z.string().trim().min(1).max(5000);
-const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),expected_deliverables:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),sub_project_id:z.number().int().positive().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
+const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),expected_deliverables:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),sub_project_id:z.number().int().positive().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional(),source_meeting_title:z.string().trim().min(1).max(200).optional()});
 type SubProject={id:number;project_id:number;name:string;objective:string;owner_id:number;due_date:string};
 const subProjectInput=z.object({name:z.string().trim().min(1).max(200),objective:z.string().trim().max(10000),owner_id:z.number().int().positive(),due_date:z.string().date()});
 async function subProjectById(subProjectId:number){const item=await one<SubProject>(db,'SELECT id,project_id,name,objective,owner_id,due_date FROM sub_projects WHERE id=$1',[subProjectId]);if(!item)throw new HttpError(404,'Sub-project not found');return item;}
@@ -165,13 +165,14 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   let subProject:SubProject|undefined;
   if(d.sub_project_id){subProject=await subProjectById(d.sub_project_id);if(subProject.project_id!==pid)throw new HttpError(400,'Sub-project must belong to project');}
   if(u.role!=='PM'||(await getProject(pid)).manager_id!==u.id){if(!subProject||subProject.owner_id!==u.id)throw new HttpError(403,'Only the PM or sub-project owner can create this task');}
+  if(d.source_meeting_title && (u.role!=='PM'||(await getProject(pid)).manager_id!==u.id))throw new HttpError(403,'Only the PM can create a meeting action item');
   await checkProjectDeadline(pid,d.due_date);
   await checkSubProjectDeadline(subProject?.id,d.due_date);
   const member=d.owner_id===u.id||await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
   let parent:Task|undefined;
   if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid||parent.sub_project_id!==(subProject?.id||null))throw new HttpError(400,'Parent must belong to the same sub-project');}
   const task=await db.transaction().execute(async tx=>{
-    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
+    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by,source_meeting_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13,$14) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id,d.source_meeting_title || null]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
   });
   await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Project ${pid}: ${task.title}`);
@@ -385,14 +386,16 @@ api.post('/pendencies/:pendencyId/resolve',handler(async(req,res)=>{
 
 api.get('/me/work',handler(async(req,res)=>{
   const u=currentUser(res);role(u,['MEMBER']);const pid=id(req.query.project_id);await projectMember(u,pid);
-  const [tasks,activity]=await Promise.all([
+  const [tasks,activity,subProjects,reviews]=await Promise.all([
     query(db,`SELECT t.*,u.full_name AS owner_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count,(SELECT r.review_comment FROM task_results r WHERE r.task_id=t.id AND r.review_status='RETURNED' ORDER BY r.version_no DESC LIMIT 1) AS return_reason FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 AND t.owner_id=$2 ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id]),
     query(db,`SELECT * FROM (
       SELECT c.id,t.id AS task_id,t.title,c.created_at,'COMMENT'::text AS event_type,c.body AS detail,author.full_name AS actor_name FROM task_comments c JOIN tasks t ON t.id=c.task_id JOIN users author ON author.id=c.author_id WHERE t.project_id=$1 AND t.owner_id=$2
       UNION ALL
       SELECT h.id,t.id AS task_id,t.title,h.created_at,h.event_type,coalesce(h.details->>'comment',h.details->>'resolution','') AS detail,actor.full_name AS actor_name FROM task_history h JOIN tasks t ON t.id=h.task_id JOIN users actor ON actor.id=h.actor_id WHERE t.project_id=$1 AND t.owner_id=$2 AND h.event_type IN ('STATUS_CHANGED','RESULT_REVIEWED','EXTENSION_DECIDED','REASSIGNMENT_DECIDED','PENDENCY_DECIDED','PENDENCY_RESOLVED')
-    ) events ORDER BY created_at DESC,id DESC LIMIT 10`,[pid,u.id])
-  ]);send(res,{tasks,activity});
+    ) events ORDER BY created_at DESC,id DESC LIMIT 10`,[pid,u.id]),
+    query(db,`SELECT sp.id,sp.name,sp.due_date,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,count(t.id) FILTER (WHERE t.status NOT IN ('DONE','SUBMITTED') AND t.due_date < CURRENT_DATE)::int AS overdue_count FROM sub_projects sp LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.project_id=$1 AND sp.owner_id=$2 GROUP BY sp.id ORDER BY sp.due_date NULLS LAST,sp.id`,[pid,u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.title,sp.name AS sub_project_name,r.submitted_at,u.full_name AS submitted_by FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE t.project_id=$1 AND sp.owner_id=$2 AND r.review_status='PENDING' ORDER BY r.submitted_at,r.id`,[pid,u.id])
+  ]);send(res,{tasks,activity,sub_projects:subProjects,reviews});
 }));
 api.get('/me/submissions',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['MEMBER','PM']);
