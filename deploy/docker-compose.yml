@@ -13,6 +13,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    networks: [app]
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -24,11 +25,13 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [web, api]
+    networks: [app, ingress]
   web:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    networks: [app]
   api:
     build:
       context: ..
@@ -53,8 +56,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [app]
 volumes:
   postgres_data:
   uploads:
   caddy_data:
   caddy_config:
+networks:
+  app:
+    internal: true
+  ingress:

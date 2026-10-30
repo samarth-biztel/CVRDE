@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource-variable/manrope/wght.css";
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 @theme{
-  --font-sans:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
-  --font-display:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  --font-sans:"Manrope Variable",ui-sans-serif,system-ui,sans-serif;
+  --font-display:"Manrope Variable",ui-sans-serif,system-ui,sans-serif;
   --color-background:#FAFAFA;
   --color-surface:#FFFFFF;
   --color-ink:#0A0A0A;
@@ -23,7 +24,7 @@
   --accent:#4338CA;
   --accent-soft:#EEF2FF;
   --success:#15803D;
-  font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  font-family:"Manrope Variable",ui-sans-serif,system-ui,sans-serif;
   background:var(--background);
   color:var(--text);
 }
@@ -46,8 +47,7 @@ body{background:var(--background);color:var(--text);line-height:1.6}
 ::view-transition-old(root){z-index:1}
 ::view-transition-new(root){z-index:2}
 :root.theme-transitioning,:root.theme-transitioning *{transition:none!important}
-h1,h2,h3,.brand strong,.stat strong{font-family:"Cabinet Grotesk",Manrope,sans-serif}
-h1,h2,h3,.brand strong,.stat strong{font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif}
+h1,h2,h3,.brand strong,.stat strong{font-family:"Manrope Variable",ui-sans-serif,system-ui,sans-serif}
 h1,h2,h3{color:var(--text);font-weight:700}
 button,.button,input,select,textarea{border-radius:2px}
 button,.button{background:var(--surface);border:1px solid var(--border);color:var(--text);box-shadow:none;transition:transform .16s ease,background .16s ease,color .16s ease,border-color .16s ease}
@@ -65,7 +65,7 @@ a{color:var(--accent)}
 .sidebar{position:sticky;top:0;height:100vh;max-height:100vh;overflow:hidden;gap:0;padding:28px 18px 20px;background:var(--surface);color:var(--text);border-right:1px solid var(--border);box-shadow:none}
 .sidebar-brand-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px 26px;border-bottom:1px solid var(--border)}
 .sidebar .brand{padding:0;min-width:0}
-.brand-icon{flex:0 0 auto;display:grid;place-items:center;width:36px;height:36px;border-radius:2px;background:var(--accent);color:#fff;font-family:"Cabinet Grotesk",sans-serif;font-weight:800;box-shadow:none}
+.brand-icon{flex:0 0 auto;display:grid;place-items:center;width:36px;height:36px;border-radius:2px;background:var(--accent);color:#fff;font-family:"Manrope Variable",sans-serif;font-weight:800;box-shadow:none}
 .brand-copy{min-width:0;white-space:nowrap}
 .brand-copy strong{font-size:1.1rem;font-weight:800;letter-spacing:-.03em;color:var(--text)}
 .brand-copy small{color:var(--muted);font-size:.57rem;letter-spacing:.18em;font-weight:700}
@@ -231,7 +231,7 @@ td strong{color:var(--text)}
 .project-summary .project-deadline{margin-top:12px}
 .project-summary .project-deadline strong{color:var(--text)}
 .project-summary-stats{display:grid;grid-template-columns:auto auto;gap:2px 12px;align-items:center;white-space:nowrap}
-.project-summary-stats strong{font:800 1.45rem "Cabinet Grotesk",sans-serif}
+.project-summary-stats strong{font:800 1.45rem "Manrope Variable",sans-serif}
 .project-summary-stats span{color:var(--muted);font-size:.7rem}
 .team-chip{display:inline-flex;border:1px solid var(--border);background:var(--subtle);padding:6px 9px;font-size:.7rem;color:var(--text)}
 .task-heading.simplified{align-items:flex-start;margin-bottom:20px}
@@ -271,3 +271,4 @@ td strong{color:var(--text)}
 @media(max-width:700px){.project-summary{display:block}.project-summary-stats{margin-top:18px;justify-content:start}.task-work-grid{grid-template-columns:1fr}.task-work-grid>div+div{padding:22px 0 0;border-left:0;border-top:1px solid var(--border)}.date-pair{grid-template-columns:1fr}}
 .upload-dropzone{position:relative;display:grid;place-items:center;min-height:76px;width:100%;border:2px dashed var(--border);background:var(--subtle);color:var(--muted);text-align:center;cursor:pointer}.upload-dropzone:hover{border-color:var(--accent)}.upload-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .pill.not_started{background:#e9eef0;color:#52616b}.pill.in_progress{background:#dff1ff;color:#17609a}.pill.submitted{background:#e9e4ff;color:#5643aa}.pill.returned{background:#fde8e4;color:#ae382a}.pill.done{background:#dff4e8;color:#18744d}
+.page-breadcrumb{display:flex;align-items:center;gap:7px;font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden}.page-breadcrumb button{border:0;background:none;color:var(--accent);padding:0;font-size:inherit}.page-breadcrumb span{overflow:hidden;text-overflow:ellipsis}.top h1{font-size:clamp(1.45rem,2vw,2rem)}@media(max-width:620px){.top h1{font-size:1.7rem}}

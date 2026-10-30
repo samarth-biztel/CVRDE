@@ -1,6 +1,6 @@
 # Offline LAN deployment
 
-The Compose stack runs the web app, API, PostgreSQL 18, and Caddy on the LAN. The frontend has no remote font, script, or icon requests. Caddy issues a local certificate and does not contact a public certificate authority.
+The Compose stack runs the web app, API, PostgreSQL 18, and Caddy on the LAN. The web, API, and database containers use an internal Docker network with no internet route; only Caddy joins the ingress network. The frontend has no remote font, script, or icon requests. Caddy issues a local certificate and does not contact a public certificate authority.
 
 1. On a build machine with the required npm packages and container images available, build the stack: `docker compose --env-file deploy/.env -f deploy/docker-compose.yml build`.
 2. Copy the repository, built images, and a `deploy/.env` based on `.env.example` to the LAN host. Use a URL-safe `POSTGRES_PASSWORD` because Compose inserts it into the PostgreSQL URL.

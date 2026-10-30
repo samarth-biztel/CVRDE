@@ -21,4 +21,5 @@ const projects=await call('/api/v1/projects');assert.equal(projects.status,200);
 const project=projects.body.find(p=>p.name.includes('Engine Component Development'));assert.ok(project);
 const tasks=await call(`/api/v1/projects/${project.id}/tasks`);assert.equal(tasks.status,200);assert.equal(tasks.body.length,17);
 assert.ok(tasks.body.some(t=>t.status==='NOT_STARTED'));
+assert.ok(tasks.body.every(t=>!['NEW','COMPLETED'].includes(t.status)));
 console.log('Docker LAN check passed: HTTPS, static app, login, local PostgreSQL, 17 tasks, migrated statuses.');

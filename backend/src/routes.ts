@@ -34,12 +34,14 @@ api.post('/auth/login',handler(async(req,res)=>{
     throw new HttpError(401,'Invalid credentials');
   }
   attempts.delete(key); await issueSession(res,user.id);
+  await query(db,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['LOGIN',user.id,JSON.stringify({username:user.username})]);
   send(res,{id:user.id,username:user.username,full_name:user.full_name,role:user.role});
 }));
 api.use(authenticate);
 api.post('/auth/logout',handler(async(req,res)=>{
+  const u=currentUser(res);
   const token=req.cookies?.cvrde_session;
-  if(typeof token==='string') await query(db,'DELETE FROM sessions WHERE token_hash=$1',[createHash('sha256').update(token).digest('hex')]);
+  if(typeof token==='string') await db.transaction().execute(async tx=>{await query(tx,'DELETE FROM sessions WHERE token_hash=$1',[createHash('sha256').update(token).digest('hex')]);await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['LOGOUT',u.id,'{}']);});
   res.clearCookie('cvrde_session',{path:'/'});send(res,{ok:true});
 }));
 api.get('/auth/me',handler(async(_req,res)=>{send(res,currentUser(res));}));
@@ -83,8 +85,7 @@ api.post('/projects/:projectId/members',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
   const {user_id}=parse(z.object({user_id:z.number().int().positive()}),req.body);
   const member=await one<User>(db,"SELECT * FROM users WHERE id=$1 AND role='MEMBER' AND active",[user_id]);if(!member)throw new HttpError(400,'Active member required');
-  await query(db,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);
-  await history(db,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});send(res,{ok:true},201);
+  await db.transaction().execute(async tx=>{await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);await history(tx,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});});send(res,{ok:true},201);
 }));
 api.get('/projects/:projectId/members',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await query(db,'SELECT u.id,u.full_name,u.username,u.role FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 ORDER BY u.id',[pid]));}));
 
@@ -167,14 +168,14 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
 api.get('/me/notifications',handler(async(_req,res)=>{
-  const u=currentUser(res);send(res,await query(db,'SELECT id,event_type,task_id,subject,sent_at,read_at FROM notification_log WHERE to_user_id=$1 ORDER BY sent_at DESC,id DESC LIMIT 100',[u.id]));
+  const u=currentUser(res);send(res,await query(db,'SELECT id,event_type,task_id,subject,sent_at,read_at FROM notification_log WHERE to_user_id=$1 AND task_id IS NOT NULL ORDER BY sent_at DESC,id DESC LIMIT 100',[u.id]));
 }));
 api.post('/me/notifications/read-all',handler(async(_req,res)=>{
-  const u=currentUser(res);await query(db,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL',[u.id]);send(res,{ok:true});
+  const u=currentUser(res);await db.transaction().execute(async tx=>{const rows=await query(tx,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL RETURNING id',[u.id]);if(rows.length)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATIONS_READ',u.id,JSON.stringify({count:rows.length})]);});send(res,{ok:true});
 }));
 api.post('/me/notifications/:notificationId/read',handler(async(req,res)=>{
   const u=currentUser(res),notificationId=id(req.params.notificationId);
-  const row=await one(db,'UPDATE notification_log SET read_at=coalesce(read_at,now()) WHERE id=$1 AND to_user_id=$2 RETURNING id',[notificationId,u.id]);
+  const row=await db.transaction().execute(async tx=>{const updated=await one(tx,'UPDATE notification_log SET read_at=now() WHERE id=$1 AND to_user_id=$2 AND read_at IS NULL RETURNING id',[notificationId,u.id]);if(updated)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATION_READ',u.id,JSON.stringify({notification_id:notificationId})]);return updated||await one(tx,'SELECT id FROM notification_log WHERE id=$1 AND to_user_id=$2',[notificationId,u.id]);});
   if(!row)throw new HttpError(404,'Notification not found');send(res,{ok:true});
 }));
 
@@ -192,7 +193,7 @@ api.patch('/groups/:groupId',handler(async(req,res)=>{
 }));
 api.delete('/groups/:groupId',handler(async(req,res)=>{
   const u=currentUser(res),gid=id(req.params.groupId),group=await one<{project_id:number}>(db,'SELECT * FROM project_groups WHERE id=$1',[gid]);if(!group)throw new HttpError(404,'Group not found');await projectManager(u,group.project_id);
-  await db.transaction().execute(async tx=>{await query(tx,"UPDATE tasks SET visibility='PRIVATE',group_id=NULL WHERE group_id=$1",[gid]);await query(tx,'DELETE FROM project_groups WHERE id=$1',[gid]);await history(tx,group.project_id,null,'GROUP_DELETED',u.id,{group_id:gid});});send(res,{ok:true});
+  await db.transaction().execute(async tx=>{const affected=await query<{id:number}>(tx,"UPDATE tasks SET visibility='PRIVATE',group_id=NULL WHERE group_id=$1 RETURNING id",[gid]);for(const task of affected)await history(tx,group.project_id,task.id,'VISIBILITY_CHANGED',u.id,{old:gid,new:null});await query(tx,'DELETE FROM project_groups WHERE id=$1',[gid]);await history(tx,group.project_id,null,'GROUP_DELETED',u.id,{group_id:gid});});send(res,{ok:true});
 }));
 api.post('/groups/:groupId/members',handler(async(req,res)=>{
   const u=currentUser(res),gid=id(req.params.groupId),group=await one<{project_id:number}>(db,'SELECT project_id FROM project_groups WHERE id=$1',[gid]);if(!group)throw new HttpError(404,'Group not found');await projectManager(u,group.project_id);
