@@ -31,6 +31,13 @@ try{
   assert.ok((await box('.project-summary-grid')).y>(await box('.project-detail-head')).y);
   await page.getByRole('button',{name:'View tasks'}).click();
   await page.getByRole('heading',{name:'Tasks',exact:true}).last().waitFor();
+  const tabs=await box('.pm-tasks-toolbar .pm-tabs'),newTask=await box('.pm-tasks-toolbar .pm-new-task');
+  assert.ok(Math.abs(tabs.y-newTask.y)<12,'task tabs and New task should share one row');
+  if(process.env.CVRDE_SCREENSHOT_LOGIN==='1'){await page.locator('.pm-tasks-toolbar').evaluate(node=>node.scrollIntoView({block:'start'}));const toolbar=await box('.pm-tasks-toolbar');await page.screenshot({path:'docs/tasks-toolbar-preview.png',clip:{x:toolbar.x,y:Math.max(0,toolbar.y),width:toolbar.width,height:toolbar.height}})}
+  await page.setViewportSize({width:375,height:812});
+  const mobileTabs=await box('.pm-tasks-toolbar .pm-tabs'),mobileNewTask=await box('.pm-tasks-toolbar .pm-new-task');
+  assert.ok(Math.abs(mobileTabs.y-mobileNewTask.y)<12,'task toolbar should stay on one row on mobile');
+  await page.setViewportSize({width:1440,height:900});
   await page.getByRole('columnheader',{name:'Select'}).waitFor();
   assert.equal(await page.getByRole('columnheader',{name:'Select'}).count(),1);
   assert.equal(await page.locator('.pm-row-edit').count(),0);

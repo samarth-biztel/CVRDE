@@ -305,8 +305,7 @@ td strong{color:var(--text)}
 .project-summary-progress .row{justify-content:space-between;gap:12px;font-size:.82rem}
 .project-summary-progress .row span{color:var(--muted)}
 .project-summary-progress progress{margin:16px 0 0}
-.project-detail h3{padding-top:18px;border-top:1px solid var(--border)}
-.project-detail .project-summary-grid+h3{padding-top:0;border-top:0}
+.project-detail>h3{margin:0 0 14px;padding:24px 0 0;border-top:1px solid var(--border)}
 
 /* Selection tools stay visible above the table; individual edits stay compact. */
 .pm-bulk-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 18px;padding:12px 14px;border:1px solid var(--border);background:var(--subtle)}
@@ -353,4 +352,17 @@ td strong{color:var(--text)}
 .pm-milestones{grid-area:milestones}.pm-overview-grid{grid-template-areas:"decision risk" "subprojects milestones" "actions actions" "workload progress" "workload mytasks"}.milestone-overview-row{padding:12px 0;border-top:1px solid var(--border);font-size:.8rem}.milestone-overview-row .row{justify-content:space-between;gap:12px}.milestone-overview-row>span{color:var(--muted)}.milestone-overview-row progress{width:100%;height:6px}
 .milestones{margin:24px 0;padding:22px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.milestone-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.milestone-card{border:1px solid var(--border);padding:16px;background:var(--surface)}.milestone-card .row{justify-content:space-between;gap:12px}.milestone-card p{font-size:.8rem;color:var(--muted)}.milestone-card progress{width:100%;height:6px}.milestone-card label{display:grid;gap:6px;font-size:.78rem;margin-top:12px}.milestone-linked{display:grid;gap:4px;margin-top:10px}.milestone-linked .row{border-top:1px solid var(--border);padding:5px 0}.milestone-linked button{font-size:.75rem}
 @media(max-width:900px){.pm-overview-grid{grid-template-areas:"decision" "risk" "subprojects" "milestones" "actions" "workload" "progress" "mytasks"}}
+.pm-tasks-toolbar{display:flex;align-items:center;gap:14px;min-width:0;margin-bottom:16px}
+.pm-tasks-toolbar .pm-tabs{flex:1;min-width:0;margin:0;overflow-x:auto;white-space:nowrap}
+.pm-tasks-toolbar .pm-tabs button{flex:none}
+.pm-tasks-toolbar .pm-new-task{flex:none;white-space:nowrap;margin-left:auto}
+.pm-task-filter-label{font-size:.72rem;font-weight:500;color:var(--muted)}
+@media(max-width:620px){.pm-tasks-toolbar{gap:8px}.pm-tasks-toolbar .pm-tabs{gap:4px}.pm-tasks-toolbar .pm-tabs button,.pm-tasks-toolbar .pm-new-task{padding:9px 11px;font-size:.74rem}}
+.project-detail .project-summary-grid{margin-bottom:0;border-bottom:0}
+.project-detail>.sub-projects,.project-detail>.milestones,.project-detail>.meetings-panel{margin:0;padding:24px 0;border-top:1px solid var(--border);border-bottom:0}
+.project-detail .sub-projects-heading,.project-detail>.meetings-panel>.row{align-items:center;margin-bottom:14px}
+.project-detail .sub-projects-heading h3,.project-detail>.meetings-panel h3{margin:0;padding:0;border:0}
+.project-detail>.sub-projects>p.muted,.project-detail>.milestones>p.muted,.project-detail>.meetings-panel>p.muted{margin:0}
+.project-detail>.chips{padding-bottom:24px}
+.project-detail>h3+p.muted{margin:0;padding-bottom:24px}
 .task-risk-chip{display:inline-flex;align-items:center;border:1px solid #e6b177;background:#fff2e1;color:#8f410e;padding:2px 7px;border-radius:4px;font-size:.68rem;font-weight:700;white-space:nowrap}.task-risk-banner{border-left:3px solid #d67b29;padding:8px 14px;background:#fff8ee}.task-risk-banner strong{color:#8f410e}.task-risk-banner p{margin:8px 0}.task-risk-banner button{margin-top:8px}
