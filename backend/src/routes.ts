@@ -175,7 +175,7 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
     const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by,source_meeting_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13,$14) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id,d.source_meeting_title || null]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
   });
-  await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Project ${pid}: ${task.title}`);
+  await notify('ASSIGNED',d.owner_id,task.id,d.source_meeting_title?`Meeting action assigned: ${task.title}`:`Task assigned: ${task.title}`,d.source_meeting_title?`From ${d.source_meeting_title}`:`Project ${pid}: ${task.title}`);
   send(res,task,201);
 }));
 api.get('/tasks/:taskId',handler(async(req,res)=>{
@@ -240,12 +240,12 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
   const row=await db.transaction().execute(async tx=>{const item=await one(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3) RETURNING *',[task.id,u.id,body]);await history(tx,task.project_id,task.id,'COMMENT_ADDED',u.id,{comment_id:(item as {id:number}).id});return item;});
   const mentions=[...body.matchAll(/@([a-z0-9._-]+)/gi)].map(x=>x[1]!.toLowerCase());
   const mentioned=mentions.length?await query<{id:number}>(db,'SELECT u.id FROM users u JOIN project_members pm ON pm.user_id=u.id WHERE pm.project_id=$1 AND lower(u.username)=ANY($2::text[]) AND u.active',[task.project_id,mentions]):[];
-  for(const recipient of new Set([task.owner_id,task.manager_id,...mentioned.map(x=>x.id)]))if(recipient!==u.id)await notify('COMMENT',recipient,task.id,`New comment: ${task.title}`,body);
+  for(const recipient of new Set([task.owner_id,task.manager_id,task.sub_project_owner_id,task.created_by,...mentioned.map(x=>x.id)].filter((value):value is number=>typeof value==='number')))if(recipient!==u.id)await notify('COMMENT',recipient,task.id,`New comment: ${task.title}`,body);
   send(res,row,201);
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
 api.get('/me/notifications',handler(async(_req,res)=>{
-  const u=currentUser(res);send(res,await query(db,'SELECT id,event_type,task_id,subject,sent_at,read_at FROM notification_log WHERE to_user_id=$1 AND task_id IS NOT NULL ORDER BY sent_at DESC,id DESC LIMIT 100',[u.id]));
+  const u=currentUser(res);send(res,await query(db,'SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id WHERE n.to_user_id=$1 ORDER BY n.sent_at DESC,n.id DESC LIMIT 100',[u.id]));
 }));
 api.post('/me/notifications/read-all',handler(async(_req,res)=>{
   const u=currentUser(res);await db.transaction().execute(async tx=>{const rows=await query(tx,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL RETURNING id',[u.id]);if(rows.length)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATIONS_READ',u.id,JSON.stringify({count:rows.length})]);});send(res,{ok:true});
