@@ -27,9 +27,18 @@ On the sign-in screen, choose a demo person; the form fills their credentials. R
 
 ## 🧭 At a glance
 
-```text
-Project → Sub-project → Task → Evidence → Review → Sign-off
-                            ↘ Meeting action → My work
+```mermaid
+flowchart LR
+    Project[Project] --> Subproject[Sub-project]
+    Subproject --> Task[Task]
+    Task --> Evidence[Evidence and submission]
+    Evidence --> Review[Review]
+    Review -->|Return with reason| Revision[Revise work]
+    Revision --> Evidence
+    Review -->|Accept| Signoff[Sign-off]
+    Signoff --> Meeting[Review meeting]
+    Meeting --> Action[Action item]
+    Action --> MyWork[Owner's My work]
 ```
 
 The app uses React and TypeScript, an Express API, PostgreSQL, and a configurable email provider. In-app notifications and the audit trail record the work loop. The [technology guide](docs/TECH_STACK.md) has the full stack.
