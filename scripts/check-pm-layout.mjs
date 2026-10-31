@@ -31,6 +31,7 @@ try{
   assert.ok((await box('.project-summary-grid')).y>(await box('.project-detail-head')).y);
   await page.getByRole('button',{name:'View tasks'}).click();
   await page.getByRole('heading',{name:'Tasks',exact:true}).last().waitFor();
+  await page.getByRole('columnheader',{name:'Select'}).waitFor();
   assert.equal(await page.getByRole('columnheader',{name:'Select'}).count(),1);
   assert.equal(await page.locator('.pm-row-edit').count(),0);
   await page.getByLabel(/^Select /).first().check();
