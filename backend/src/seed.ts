@@ -117,8 +117,10 @@ try{
     const cfd=await work(design,'Combustion chamber CFD simulation','scientist2.demo',3,'SUBMITTED','HIGH');
     const thermalHead=await work(design,'Cylinder head thermal analysis','task2.demo',4,'RETURNED','HIGH');
     await work(design,'Crankshaft stress analysis','task2.demo',-2,'IN_PROGRESS','HIGH');
-    await work(design,'Cooling jacket design','scientist2.demo',6,'IN_PROGRESS');
-    await work(design,'Friction loss estimation','task2.demo',12,'NOT_STARTED');
+    const cooling=await work(design,'Cooling jacket design','scientist2.demo',6,'IN_PROGRESS');
+    await work(design,'Friction loss estimation','task2.demo',2,'NOT_STARTED');
+    await query(tx,"UPDATE tasks SET created_at=now()-interval '20 days',updated_at=now()-interval '20 days' WHERE id=$1",[cooling]);
+    await query(tx,"UPDATE task_history SET created_at=now()-interval '20 days' WHERE task_id=$1",[cooling]);
     const meetingDate=day(-14),meetingTitle='Design review – Design & Simulation';
     const meeting=await one<{id:number}>(tx,'INSERT INTO meetings(project_id,sub_project_id,title,meeting_date,minutes,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6,now()-interval \'14 days\') RETURNING id',[programmeId,design,meetingTitle,meetingDate,'Reviewed simulation targets and agreed to update inputs before the next CFD review. A. Iyer will share assumptions with Testing & Validation.',ids['pm.demo']]);
     for(const name of ['pm.demo','scientist1.demo','scientist2.demo','task2.demo'])await query(tx,'INSERT INTO meeting_attendees(meeting_id,user_id) VALUES($1,$2)',[meeting!.id,ids[name]]);

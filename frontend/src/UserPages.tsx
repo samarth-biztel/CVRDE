@@ -9,7 +9,7 @@ type WorkEvent={id:number;task_id:number;title:string;created_at:string;event_ty
 type Work={tasks:WorkTask[];activity:WorkEvent[];sub_projects:{id:number;name:string;due_date:string|null;task_total:number;task_done:number;overdue_count:number}[];reviews:{id:number;task_id:number;title:string;sub_project_name:string;submitted_at:string;submitted_by:string}[]};
 type Submission={id:number;task_id:number;project_id:number;title:string;project_name:string;kind:'RESULT'|'EXTENSION'|'REASSIGNMENT'|'PREREQUISITE';created_at:string;state:string;reviewer_comment:string|null;summary:string};
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
-const weekEnd=(key:string)=>{const d=new Date(key+'T12:00:00');d.setDate(d.getDate()+6-((d.getDay()+6)%7));return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+const weekEnd=(key:string)=>{const d=new Date(key+'T12:00:00');d.setDate(d.getDate()+6);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const dueSort=(a:Task,b:Task)=>String(a.due_date||'9999').localeCompare(String(b.due_date||'9999'))||a.id-b.id;
 const eventText=(event:WorkEvent)=>{
   switch(event.event_type){

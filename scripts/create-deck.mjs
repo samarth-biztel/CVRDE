@@ -27,7 +27,7 @@ function slide(title,eyebrow,image,points){
     y+=1.35;
   }
   s.addText('FICTIONAL DATA  /  OCT 2026',{x:.45,y:7.13,w:4.5,h:.2,fontSize:8,bold:true,charSpacing:1,color:C.gray,margin:0});
-  s.addText(String(pptx._slides.length).padStart(2,'0')+' / 08',{x:12.05,y:7.12,w:.75,h:.25,align:'right',fontSize:9,color:C.gray,margin:0});
+  s.addText(String(pptx._slides.length).padStart(2,'0')+' / 09',{x:12.05,y:7.12,w:.75,h:.25,align:'right',fontSize:9,color:C.gray,margin:0});
 }
 
 slide('CVRDE Work Management','Pilot demonstration','01-login',[
@@ -36,40 +36,50 @@ slide('CVRDE Work Management','Pilot demonstration','01-login',[
   'One Vercel project hosts the interface and API.'
 ]);
 slide('Project overview','Project manager','02-pm-overview',[
-  'Dashboard totals come from current task and approval data.',
-  'Seventeen seeded tasks cover varied owners and deadlines.',
-  'Decision and overdue lists lead to the underlying work.'
+  'Three sub-projects are at different stages.',
+  'Risk shows overdue, due soon, and stale tasks.',
+  'Decisions and progress lead to the underlying work.'
 ]);
-slide('Project setup and groups','Project manager settings','03-projects-and-groups',[
-  'Create projects and add existing team members.',
-  'Add groups manually or import an Excel sheet.',
-  'Group permissions control shared work.'
+slide('Project structure','Project manager','03-projects-and-groups',[
+  'Project → Sub-project → Task.',
+  'PM sets each sub-project objective, owner, and due date.',
+  'Sub-project owners assign tasks within their scope.'
 ]);
-slide('Scientist workspace','Scientist one','07-member-tasks',[
-  'The table shows task, due date, and linked work.',
-  'Members see owned and permitted shared tasks.',
-  'Status and results are updated inside task detail.'
+slide('Task owner workspace','My work','07-member-tasks',[
+  'Owned tasks are grouped by when action is due.',
+  'Returned work shows the reviewer reason.',
+  'Submitted work waits for review.'
 ]);
 slide('Results and evidence','Task detail','04-task-detail',[
-  'Status changes through a dropdown.',
-  'A single description submits each result version.',
-  'Prerequisites and reassignment live in task detail.'
+  'Start, attach a report, and submit a result.',
+  'Reviewers return with a reason or sign off.',
+  'Activity explains each change in plain language.'
 ]);
-slide('Review and approvals','Project manager','05-pending-actions',[
-  'Filter decisions by request type and task.',
-  'Managers decide employee reassignment requests.',
-  'Results, extensions, and prerequisites share one queue.'
+slide('Evidence review','Sub-project owner','05-pending-actions',[
+  'Submitted evidence is visible in the review queue.',
+  'Return requires a reason and alerts the task owner.',
+  'Sign-off increases sub-project progress.'
 ]);
-slide('Independent reviewer','Reviewer','08-reviewer-actions',[
-  'A PM reassignment request reaches the reviewer.',
-  'The reason and work window are visible before a decision.',
-  'Approval changes ownership; rejection retains it.'
+slide('Meeting follow-up','Project manager','08-reviewer-actions',[
+  'Record minutes and assign an action item.',
+  'The action appears in its owner’s My work.',
+  'The owner receives an assignment notification.'
 ]);
-slide('Reports and pilot readiness','Project manager','06-reports',[
-  'Overdue Tasks and Project Progress offer CSV export.',
-  'The HTTPS demo runs on biztel-ai-cvrde.vercel.app.',
-  'SMTP delivery requires controlled inboxes and settings.'
+slide('Pilot readiness','Hosted demo','06-reports',[
+  'The eight-step loop runs on the hosted build.',
+  'Email uses Resend with a redirected team inbox.',
+  'Live delivery check follows deployment configuration.'
 ]);
+{
+  const s=pptx.addSlide();s.background={color:'FAFAFA'};
+  s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:.12,h:7.5,line:{color:C.accent},fill:{color:C.accent}});
+  s.addText('ROADMAP',{x:.45,y:.3,w:10,h:.2,fontSize:8,bold:true,charSpacing:1.8,color:C.accent,margin:0});
+  s.addText('After the pilot',{x:.45,y:.58,w:12,h:.5,fontFace:'Aptos Display',fontSize:28,bold:true,color:C.ink,margin:0});
+  const items=['Milestone planning and tracking','Minutes approval workflow','Technology readiness level (TRL) tracking','Multi-level review','On-premise deployment and object storage'];
+  items.forEach((item,i)=>{const y=1.5+i*1.02;s.addShape(pptx.ShapeType.rect,{x:.52,y:y+.16,w:.12,h:.12,line:{color:C.accent},fill:{color:C.accent}});s.addText(item,{x:.86,y,w:11.5,h:.6,fontSize:20,color:C.ink,margin:0})});
+  s.addText('PLANNED  /  NOT IN CURRENT DEMO',{x:.45,y:7.13,w:7,h:.2,fontSize:8,bold:true,charSpacing:1,color:C.gray,margin:0});
+  s.addText('09 / 09',{x:12.05,y:7.12,w:.75,h:.25,align:'right',fontSize:9,color:C.gray,margin:0});
+}
 const output=join(root,'docs','CVRDE_Demo_Presentation.pptx');
 await mkdir(join(root,'docs'),{recursive:true});
 await pptx.writeFile({fileName:output});

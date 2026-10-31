@@ -82,7 +82,7 @@ api.get('/projects',handler(async(_req,res)=>{
   send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id) AS task_total,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status='DONE') AS task_done,
-    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day'))) AS at_risk
+    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR (t.status<>'SUBMITTED' AND greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day')))) AS at_risk
     FROM projects p JOIN users manager ON manager.id=p.manager_id LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
 }));
 api.post('/projects',handler(async(req,res)=>{

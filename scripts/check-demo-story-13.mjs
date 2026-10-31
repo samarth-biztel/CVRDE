@@ -59,7 +59,12 @@ try{
   const meeting=await checked(await api(pm.ctx,`/projects/${project.id}/meetings`,'post',{title:'Valve train review',meeting_date:today,sub_project_id:design.id,minutes:'Reviewed the accepted valve train simulation. Share the revised timing assumptions with Prototype Build.',attendee_ids:[pm.user.id,sub.user.id,owner.user.id],actions:[{description:'Share revised valve timing assumptions with Prototype Build',owner_id:sub.user.id,due_date:due}]}),201,'Record meeting');
   const detail=await checked(await api(pm.ctx,`/meetings/${meeting.id}`),200,'Meeting detail');
   assert.equal(detail.actions.length,1);
-  await show('pm.demo','8. PM records a review meeting and action item','projects');
+  await show('pm.demo','7. PM records a review meeting and action item','projects');
+  const actionId=detail.actions[0].id;
+  const subWork=await checked(await api(sub.ctx,`/me/work?project_id=${project.id}`),200,'Sub-project owner My work');
+  assert.ok(subWork.tasks.some(task=>task.id===actionId&&task.source_meeting_title?.includes('Valve train review')));
+  assert.ok((await checked(await api(sub.ctx,'/me/notifications'),200,'Meeting action notification')).some(item=>item.task_id===actionId&&item.event_type==='ASSIGNED'));
+  await show('scientist1.demo','8. Action item appears in A. Iyer’s My work with a notification','mine');
   console.log(`Hosted demo story passed at ${origin}: task ${task.id}, return, notification, resubmission, sign-off, progress, and meeting ${meeting.id}.`);
 }finally{
   if(browserContext){await browserContext.close();await video.saveAs(resolve('demo/recordings/cvrde-walkthrough.webm'));const raw=await video.path();if(raw.startsWith(resolve('demo/recordings')+sep))await unlink(raw);await browser.close();console.log('Backup recording saved: demo/recordings/cvrde-walkthrough.webm');}

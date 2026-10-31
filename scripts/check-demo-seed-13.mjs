@@ -14,11 +14,13 @@ try{
   const find=title=>{const item=tasks.find(task=>task.title===title);assert.ok(item,title);return item};
   assert.equal(find('Combustion chamber CFD simulation').status,'SUBMITTED');assert.equal(find('Cylinder head thermal analysis').status,'RETURNED');assert.equal(find('Crankshaft stress analysis').status,'IN_PROGRESS');
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-2);assert.equal(find('Crankshaft stress analysis').due_date.slice(0,10),yesterday.toISOString().slice(0,10));
+  const twoDays=new Date();twoDays.setDate(twoDays.getDate()+2);assert.equal(find('Friction loss estimation').due_date.slice(0,10),twoDays.toISOString().slice(0,10));assert.equal(find('Friction loss estimation').status,'NOT_STARTED');
   const thermal=find('Cylinder head thermal analysis');const results=await (await accounts['task2.demo'].ctx.get(`/api/v1/tasks/${thermal.id}/results`)).json();assert.match(results[0].review_comment,/Boundary conditions don't match revised targets/);
   const cfd=find('Combustion chamber CFD simulation');const evidence=await (await taskOwner.ctx.get(`/api/v1/tasks/${cfd.id}/attachments`)).json();assert.ok(evidence.some(file=>file.original_name==='combustion-cfd-report.pdf'));
   const queue=await (await designOwner.ctx.get('/api/v1/me/pending-actions')).json();assert.ok(queue.some(item=>item.task_id===cfd.id&&item.kind==='RESULT_REVIEW'));
   const meetingList=await (await pm.ctx.get(`/api/v1/projects/${project.id}/meetings`)).json();assert.equal(meetingList.length,1);const meeting=await (await pm.ctx.get(`/api/v1/meetings/${meetingList[0].id}`)).json();assert.equal(meeting.attendees.length,4);assert.equal(meeting.actions.length,2);assert.ok(meeting.actions.every(item=>find(item.description).source_meeting_title?.startsWith('Design review')));
   const notifications=await (await accounts['task2.demo'].ctx.get('/api/v1/me/notifications')).json();assert.ok(notifications.some(item=>item.task_id===thermal.id&&item.event_type==='RETURNED'));
   const risk=await (await pm.ctx.get(`/api/v1/projects/${project.id}/risk`)).json();assert.equal(risk.sub_projects.length,3);
+  const cooling=find('Cooling jacket design');const coolingRisk=risk.tasks.find(item=>item.id===cooling.id);assert.ok(coolingRisk);assert.ok(Date.now()-new Date(coolingRisk.last_activity_at).getTime()>5*86400000,'Cooling jacket design should be stale');
   console.log('Demo seed #13 passed: six logins, three staged sub-projects, 16 tasks, evidence, review, meeting actions, and notifications.');
 }finally{await Promise.all(contexts.map(ctx=>ctx.dispose()))}

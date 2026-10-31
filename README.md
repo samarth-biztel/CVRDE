@@ -31,6 +31,7 @@ The project switcher opens **Engine Development Programme**, a fictional 1.5 L p
 5. S. Nair uploads [revised report](frontend/public/demo-files/revised-cfd-report.pdf) and resubmits.
 6. A. Iyer accepts the result. R. Sharma sees Design & Simulation progress increase.
 7. R. Sharma records a review meeting and adds an action item.
+8. A. Iyer sees the action item in My work and receives an assignment notification.
 
 A [sample drawing](frontend/public/demo-files/piston-concept-drawing.png) is also provided. All files contain dummy content. A [backup walkthrough recording](demo/recordings/cvrde-walkthrough.webm) is available for the team.
 
@@ -66,6 +67,8 @@ Email is a second channel for assignment, submission, return, sign-off, meeting 
 For a future internal SMTP server, use `EMAIL_PROVIDER=smtp` with `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM`; set `SMTP_USER` and `SMTP_PASSWORD` if authentication is required.
 
 The Docker API joins the outbound network for an SMTP server on the LAN. Do not add SMTP credentials to Git; configure these values in the deployment environment. The test sink in [`scripts/smtp-sink-17.mjs`](scripts/smtp-sink-17.mjs) captures fictional messages locally for verification.
+
+The hosted demo keeps groups, reassignment and extension requests, prerequisites, and linked task controls out of the interface while retaining their data and API support. Set `VITE_DEMO_MODE=false` at frontend build time to show those controls. The approved scope and deferred items are recorded in [`docs/DEMO_BUILD_PLAN.md`](docs/DEMO_BUILD_PLAN.md).
 
 ## Repository map
 
