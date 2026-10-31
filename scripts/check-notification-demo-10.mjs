@@ -27,11 +27,11 @@ try{
 
   const page=await browser.newPage({ignoreHTTPSErrors:true});await page.goto(origin);await page.getByTestId('login-username').fill('scientist2.demo');await page.getByTestId('login-password').fill('CVRDE-Demo-2026!');await page.getByTestId('login-submit').click();
   const bell=page.getByRole('button',{name:/Notifications, \d+ unread/});await bell.waitFor();const count=Number((await bell.getAttribute('aria-label')).match(/(\d+) unread/)?.[1]);
-  const actionResponse=await pm.ctx.post(`/api/v1/projects/${project.id}/tasks`,{data:{title:'Meeting action notification task',description:'',owner_id:taskOwner.user.id,due_date:dueDate,priority:'MEDIUM',source_meeting_title:'Notification review meeting'}});assert.equal(actionResponse.status(),201);const action=await actionResponse.json();
+  const actionResponse=await pm.ctx.post(`/api/v1/projects/${project.id}/meetings`,{data:{title:'Notification review meeting',meeting_date:new Date().toISOString().slice(0,10),minutes:'Assign the follow-up.',attendee_ids:[pm.user.id,taskOwner.user.id],actions:[{description:'Meeting action notification task',owner_id:taskOwner.user.id,due_date:dueDate}]}});assert.equal(actionResponse.status(),201);const actionId=(await actionResponse.json()).task_ids[0];
   await page.waitForFunction(expected=>Number(document.querySelector('.bell-button')?.getAttribute('aria-label')?.match(/(\d+) unread/)?.[1])===expected,count+1,{timeout:15000});
   await bell.click();await page.getByText('Meeting action assigned: Meeting action notification task').click();
   await page.getByRole('heading',{name:'Task detail'}).waitFor();await page.getByText('Meeting action notification task').first().waitFor();
-  assert.equal((await (await taskOwner.ctx.get('/api/v1/me/notifications')).json()).find(item=>item.task_id===action.id).read_at!==null,true);
+  assert.equal((await (await taskOwner.ctx.get('/api/v1/me/notifications')).json()).find(item=>item.task_id===actionId).read_at!==null,true);
   assert.equal((await taskOwner.ctx.post('/api/v1/me/notifications/read-all',{data:{}})).status(),200);
   assert.equal((await (await taskOwner.ctx.get('/api/v1/me/notifications')).json()).filter(item=>!item.read_at).length,0);
   console.log('Notification #10 passed: correct recipients, live bell count, task click, read and read-all.');

@@ -9,9 +9,10 @@ try{
   const pmApi=await loginApi('pm.demo'),subApi=await loginApi('scientist1.demo'),taskApi=await loginApi('scientist2.demo');
   const project=(await (await pmApi.ctx.get('/api/v1/projects')).json()).find(item=>item.name.includes('Engine Component Development'));assert.ok(project);
   const date=new Date(project.target_date.slice(0,10)+'T00:00:00Z');date.setUTCDate(date.getUTCDate()-10);const due=date.toISOString().slice(0,10);
-  const meetingAction=await pmApi.ctx.post(`/api/v1/projects/${project.id}/tasks`,{data:{title:'Follow up simulation review',description:'Close the review action',owner_id:subApi.id,due_date:due,priority:'MEDIUM',source_meeting_title:'Simulation review meeting'}});
+  const meetingData={title:'Simulation review meeting',meeting_date:new Date().toISOString().slice(0,10),minutes:'Follow up the simulation review.',attendee_ids:[pmApi.id,subApi.id],actions:[{description:'Follow up simulation review',owner_id:subApi.id,due_date:due}]};
+  const meetingAction=await pmApi.ctx.post(`/api/v1/projects/${project.id}/meetings`,{data:meetingData});
   assert.equal(meetingAction.status(),201);
-  const deniedAction=await subApi.ctx.post(`/api/v1/projects/${project.id}/tasks`,{data:{title:'Unapproved meeting action',description:'',owner_id:subApi.id,due_date:due,priority:'MEDIUM',source_meeting_title:'Simulation review meeting'}});
+  const deniedAction=await subApi.ctx.post(`/api/v1/projects/${project.id}/meetings`,{data:meetingData});
   assert.equal(deniedAction.status(),403);
   const subResponse=await pmApi.ctx.post(`/api/v1/projects/${project.id}/sub-projects`,{data:{name:`Browser review ${Date.now()}`,objective:'Review simulation',owner_id:subApi.id,due_date:due}});assert.equal(subResponse.status(),201);const subProject=await subResponse.json();
   const taskResponse=await subApi.ctx.post(`/api/v1/projects/${project.id}/tasks`,{data:{sub_project_id:subProject.id,title:'Browser simulation review',description:'Simulation',expected_deliverables:'Report',owner_id:taskApi.id,due_date:due,priority:'HIGH'}});assert.equal(taskResponse.status(),201);const task=await taskResponse.json();
@@ -21,7 +22,7 @@ try{
   const ownerHome=await (await subApi.ctx.get(`/api/v1/me/work?project_id=${project.id}`)).json();
   assert.equal(ownerHome.sub_projects.find(item=>item.id===subProject.id)?.task_total,1);
   assert.equal(ownerHome.reviews.find(item=>item.task_id===task.id)?.submitted_by,'Demo Scientist Two');
-  assert.equal(ownerHome.tasks.find(item=>item.title==='Follow up simulation review')?.source_meeting_title,'Simulation review meeting');
+  assert.match(ownerHome.tasks.find(item=>item.title==='Follow up simulation review')?.source_meeting_title||'',/^Simulation review meeting, /);
   const taskHome=await (await taskApi.ctx.get(`/api/v1/me/work?project_id=${project.id}`)).json();
   assert.equal(taskHome.sub_projects.length,0);
   assert.equal(taskHome.reviews.length,0);
@@ -32,7 +33,7 @@ try{
   await subOwner.getByRole('heading',{name:'My sub-projects'}).waitFor();
   await subOwner.getByText(subProject.name).first().waitFor();
   await subOwner.getByText('0 of 1 tasks done').waitFor();
-  await subOwner.getByText('Action from Simulation review meeting').waitFor();
+  await subOwner.getByText('From: Simulation review meeting').waitFor();
   await subOwner.getByTestId('nav-pending').click();
   const card=subOwner.locator('.review-card').filter({hasText:'Browser simulation review'});
   await card.getByText(subProject.name).waitFor();

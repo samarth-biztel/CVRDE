@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db, one, query } from './db.js';
 import { authenticate, currentUser, getProject, handler, history, HttpError, issueSession, notify, projectManager, projectMember, role, taskAccess, taskById, uid, visibleTaskIds, type Task, type User } from './core.js';
 import { fileRoutes } from './files.js';
+import { meetingRoutes } from './meetings.js';
 import { demoAccounts, demoPassword } from './demo.js';
 
 export const api = Router();
@@ -12,7 +13,7 @@ const parse = <T extends z.ZodTypeAny>(schema:T,value:unknown):z.infer<T> => sch
 const id = (value:unknown) => uid(value);
 const send = (res:import('express').Response,value:unknown,status=200) => res.status(status).json(value);
 const nonempty = z.string().trim().min(1).max(5000);
-const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),expected_deliverables:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),sub_project_id:z.number().int().positive().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional(),source_meeting_title:z.string().trim().min(1).max(200).optional()});
+const taskInput = z.object({title:z.string().trim().min(1).max(200),description:z.string().max(10000).default(''),expected_deliverables:z.string().max(10000).default(''),owner_id:z.number().int().positive(),priority:z.enum(['LOW','MEDIUM','HIGH']).default('MEDIUM'),due_date:z.string().date().nullable().optional(),sub_project_id:z.number().int().positive().nullable().optional(),parent_task_id:z.number().int().positive().nullable().optional(),plm_ref:z.string().max(100).nullable().optional()});
 type SubProject={id:number;project_id:number;name:string;objective:string;owner_id:number;due_date:string};
 const subProjectInput=z.object({name:z.string().trim().min(1).max(200),objective:z.string().trim().max(10000),owner_id:z.number().int().positive(),due_date:z.string().date()});
 async function subProjectById(subProjectId:number){const item=await one<SubProject>(db,'SELECT id,project_id,name,objective,owner_id,due_date FROM sub_projects WHERE id=$1',[subProjectId]);if(!item)throw new HttpError(404,'Sub-project not found');return item;}
@@ -44,6 +45,7 @@ api.post('/auth/login',handler(async(req,res)=>{
   send(res,{id:user.id,username:user.username,full_name:user.full_name,role:user.role});
 }));
 api.use(authenticate);
+api.use(meetingRoutes);
 api.post('/auth/logout',handler(async(req,res)=>{
   const u=currentUser(res);
   const token=req.cookies?.cvrde_session;
@@ -165,17 +167,16 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   let subProject:SubProject|undefined;
   if(d.sub_project_id){subProject=await subProjectById(d.sub_project_id);if(subProject.project_id!==pid)throw new HttpError(400,'Sub-project must belong to project');}
   if(u.role!=='PM'||(await getProject(pid)).manager_id!==u.id){if(!subProject||subProject.owner_id!==u.id)throw new HttpError(403,'Only the PM or sub-project owner can create this task');}
-  if(d.source_meeting_title && (u.role!=='PM'||(await getProject(pid)).manager_id!==u.id))throw new HttpError(403,'Only the PM can create a meeting action item');
   await checkProjectDeadline(pid,d.due_date);
   await checkSubProjectDeadline(subProject?.id,d.due_date);
   const member=d.owner_id===u.id||await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
   let parent:Task|undefined;
   if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid||parent.sub_project_id!==(subProject?.id||null))throw new HttpError(400,'Parent must belong to the same sub-project');}
   const task=await db.transaction().execute(async tx=>{
-    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by,source_meeting_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13,$14) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id,d.source_meeting_title || null]);
+    const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
   });
-  await notify('ASSIGNED',d.owner_id,task.id,d.source_meeting_title?`Meeting action assigned: ${task.title}`:`Task assigned: ${task.title}`,d.source_meeting_title?`From ${d.source_meeting_title}`:`Project ${pid}: ${task.title}`);
+  await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Project ${pid}: ${task.title}`);
   send(res,task,201);
 }));
 api.get('/tasks/:taskId',handler(async(req,res)=>{
