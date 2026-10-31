@@ -137,7 +137,7 @@ api.get('/sub-projects/:subProjectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await projectMember(u,sp.project_id);
   const project=await getProject(sp.project_id);
   if(u.id!==project.manager_id&&u.id!==sp.owner_id&&!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[sp.id,u.id]))throw new HttpError(404,'Sub-project not found');
-  send(res,await query(db,'SELECT t.*,owner.full_name AS owner_name FROM tasks t JOIN users owner ON owner.id=t.owner_id WHERE t.sub_project_id=$1 ORDER BY t.due_date NULLS LAST,t.id',[sp.id]));
+  send(res,await query(db,'SELECT t.*,owner.full_name AS owner_name,sp.name AS sub_project_name FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.sub_project_id=$1 ORDER BY t.due_date NULLS LAST,t.id',[sp.id]));
 }));
 api.post('/projects/:projectId/members',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
@@ -155,11 +155,11 @@ api.delete('/projects/:projectId/members/:userId',handler(async(req,res)=>{
 
 api.get('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
-  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND (p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.id`,[pid,u.id]));
+  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND (p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id]));
 }));
 api.get('/tasks/mine',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['MEMBER']);
-  send(res,await query(db,`SELECT t.*,p.name AS project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.owner_id=$1 OR sp.owner_id=$1 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$1)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$1)) ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
+  send(res,await query(db,`SELECT t.*,p.name AS project_name,sp.name AS sub_project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.owner_id=$1 OR sp.owner_id=$1 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$1)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$1)) ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
 }));
 api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
