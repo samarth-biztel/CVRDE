@@ -33,7 +33,7 @@ Some checks and tests change demo data. Reset after running the scripted [walkth
 
 [`vercel.json`](../vercel.json) builds `frontend/dist` and rewrites `/api/v1/*` and `/health` to [`api/index.ts`](../api/index.ts). Configure `DATABASE_URL` and the chosen [email variables](CONFIGURATION.md#email-delivery) in each Vercel project's environment settings. Set `PUBLIC_APP_URL` to that deployment's own URL so email buttons open the hosted task. Vercel does not read the root `.env` from your machine.
 
-After deploying, migrate and seed the intended database once. Check `/health`, sign in, and run the hosted seed check. The two demo URLs currently share a demo database, so a reset affects both.
+After deploying, migrate and seed the intended database once. Check `/health`, sign in, and run the hosted seed check. A reset affects every deployment connected to that database.
 
 ```powershell
 $env:CVRDE_UI_URL='https://biztel-ai-cvrde.vercel.app'

@@ -2,10 +2,7 @@
 
 A fictional engine development programme showing how a PM structures work, assigns tasks, reviews evidence, signs off results, and follows up on meetings. **Use fictional data only:** the public demo accounts are not for real CVRDE or DRDO information.
 
-| Open the demo | Check the API |
-|---|---|
-| [Primary deployment](https://biztel-ai-cvrde.vercel.app/) | [Health](https://biztel-ai-cvrde.vercel.app/health) |
-| [Second deployment](https://cvrde-five.vercel.app/) | [Health](https://cvrde-five.vercel.app/health) |
+[Open the live demo](https://biztel-ai-cvrde.vercel.app/)
 
 ## 📚 Documentation
 
