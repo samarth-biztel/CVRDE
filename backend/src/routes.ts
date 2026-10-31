@@ -76,7 +76,7 @@ api.get('/projects',handler(async(_req,res)=>{
   send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id) AS task_total,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status='DONE') AS task_done,
-    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day'))) AS at_risk
+    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day'))) AS at_risk
     FROM projects p JOIN users manager ON manager.id=p.manager_id LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
 }));
 api.post('/projects',handler(async(req,res)=>{
@@ -206,6 +206,20 @@ api.post('/tasks/:taskId/progress',handler(async(req,res)=>{
   const d=parse(z.object({percent:z.number().int().min(0).max(100),justification:z.string().trim().min(1).max(2000)}),req.body);
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE tasks SET progress_percent=$1,updated_at=now() WHERE id=$2',[d.percent,task.id]);await history(tx,task.project_id,task.id,'PROGRESS_CHANGED',u.id,{old:task.progress_percent,new:d.percent,justification:d.justification});});
   send(res,{progress_percent:d.percent});
+}));
+api.post('/tasks/:taskId/risk',handler(async(req,res)=>{
+  const user=currentUser(res),task=await taskById(id(req.params.taskId));
+  const input=parse(z.object({flagged:z.boolean(),reason:z.string().trim().max(1000).optional()}).strict(),req.body);
+  if(input.flagged){
+    if(user.id!==task.owner_id)throw new HttpError(403,'Only the task owner can flag risk');
+    if(task.status==='DONE')throw new HttpError(409,'Completed tasks cannot be flagged');
+    if(!input.reason)throw new HttpError(400,'A short risk reason is required');
+  }else if(user.id!==task.owner_id&&!(user.role==='PM'&&user.id===task.manager_id))throw new HttpError(403,'Only the task owner or PM can clear risk');
+  if(input.flagged===task.risk_flag)throw new HttpError(409,input.flagged?'Task is already flagged':'Task is not flagged');
+  await db.transaction().execute(async tx=>{
+    await query(tx,'UPDATE tasks SET risk_flag=$1,risk_reason=$2,updated_at=now() WHERE id=$3',[input.flagged,input.flagged?input.reason:null,task.id]);
+    await history(tx,task.project_id,task.id,input.flagged?'TASK_RISK_FLAGGED':'TASK_RISK_CLEARED',user.id,{reason:input.flagged?input.reason:task.risk_reason});
+  });send(res,{risk_flag:input.flagged,risk_reason:input.flagged?input.reason:null});
 }));
 api.patch('/tasks/:taskId',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));await canEditTask(u,task);
@@ -479,7 +493,7 @@ api.get('/projects/:projectId/dashboard',handler(async(req,res)=>{
 api.get('/projects/:projectId/risk',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
   const [tasks,activity,project,subProjects]=await Promise.all([
-    query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,t.source_meeting_title,greatest(t.created_at,t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.created_at)) AS last_activity_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
+    query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,t.risk_flag,t.risk_reason,t.source_meeting_title,greatest(t.created_at,t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.created_at)) AS last_activity_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
     query(db,`SELECT h.id,h.task_id,h.event_type,h.created_at,u.full_name AS actor_name,t.title AS task_title FROM task_history h JOIN users u ON u.id=h.actor_id LEFT JOIN tasks t ON t.id=h.task_id WHERE h.project_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 10`,[pid]),
     one<{target_date:string|null;stale_after_days:number}>(db,'SELECT target_date,stale_after_days FROM projects WHERE id=$1',[pid]),
     query(db,`SELECT sp.id,sp.name,sp.due_date,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,count(t.id) FILTER (WHERE t.status NOT IN ('DONE','SUBMITTED') AND t.due_date < CURRENT_DATE)::int AS overdue_count FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.project_id=$1 GROUP BY sp.id,owner.full_name ORDER BY sp.due_date NULLS LAST,sp.id`,[pid])
