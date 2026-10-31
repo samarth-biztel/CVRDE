@@ -20,10 +20,10 @@ The at-risk panel includes overdue open tasks, tasks due within three days that 
 4. Notifications through the existing `notify()` path and `notification_log`, after commit. Bell and email share assignment, submission, return, resubmission, sign-off, and meeting action assignment events. Redirect demo email to one team inbox. The scripted hosted walkthrough checks the eight UI steps; the six email deliveries require live Resend credentials and a verified sender.
 5. Seed, hosted walkthrough recording, and cloud regression checks. Reset the fictional project after every walkthrough.
 
-The email channel is implemented with Resend support. On 31 Oct 2026, the local Docker eight-step story produced six `SENT` notification-log records; Resend reported all six `delivered` to the configured team inbox. Hosted delivery verification is pending `EMAIL_ENABLED=true`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM`, `EMAIL_REDIRECT_TO`, and `PUBLIC_APP_URL` in each Vercel project's environment settings. No key belongs in Git.
+The email channel is implemented with Resend support. On 31 Oct 2026, the local Docker and hosted eight-step stories each produced six `SENT` notification-log records; Resend reported all six hosted messages `delivered` to the configured team inbox. The fictional demo project was reset after the hosted check. Hosted deployments require `EMAIL_ENABLED=true`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM`, `EMAIL_REDIRECT_TO`, and `PUBLIC_APP_URL` in their environment settings. No key belongs in Git.
 
 ## Known gaps and roadmap
 
 - PM My work: no PM-owned tasks in the fictional seed. The general My work and My submissions screens exist, but the demo uses Submitted in My work for its loop.
 - Files currently live in PostgreSQL; move them to object storage for a future on-premise deployment.
-- Roadmap: milestone planning, minutes approval, TRL tracking, multi-level review, and on-premise deployment. These are not claims about the current demo.
+- Roadmap: advanced milestone planning, minutes approval, TRL tracking, multi-level review, and on-premise deployment. The demo includes minimal milestones; the other roadmap items are not claims about the current build.

@@ -1,5 +1,7 @@
 # Handover
 
+> Historical handover snapshot from the earlier build. For the current feature set, hosted email status, demo mode, and run instructions, start with the [documentation index](../README.md).
+
 ## What is included
 
 - React frontend and Express API implementing the F1–F9 demo flows and E1–E5 extensions in the plan.

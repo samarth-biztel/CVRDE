@@ -1,5 +1,7 @@
 # Acceptance and verification
 
+> Historical acceptance snapshot from the earlier build. For the current hosted demo and verified Resend delivery, see the [documentation index](../README.md) and [demo guide](DEMO_GUIDE.md).
+
 ## 27 October 2026 update
 
 The revised task and review workflow was checked against the local production frontend and Neon demo database. The demo was reset after browser testing and presentation capture.
