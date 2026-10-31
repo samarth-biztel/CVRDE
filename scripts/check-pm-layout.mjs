@@ -31,6 +31,7 @@ try{
   assert.ok((await box('.project-summary-grid')).y>(await box('.project-detail-head')).y);
   await page.getByRole('button',{name:'View tasks'}).click();
   await page.getByRole('heading',{name:'Tasks',exact:true}).last().waitFor();
+  await page.locator('.pm-tasks-toolbar').waitFor({timeout:10000});
   const tabs=await box('.pm-tasks-toolbar .pm-tabs'),newTask=await box('.pm-tasks-toolbar .pm-new-task');
   assert.ok(Math.abs(tabs.y-newTask.y)<12,'task tabs and New task should share one row');
   if(process.env.CVRDE_SCREENSHOT_LOGIN==='1'){await page.locator('.pm-tasks-toolbar').evaluate(node=>node.scrollIntoView({block:'start'}));const toolbar=await box('.pm-tasks-toolbar');await page.screenshot({path:'docs/tasks-toolbar-preview.png',clip:{x:toolbar.x,y:Math.max(0,toolbar.y),width:toolbar.width,height:toolbar.height}})}
