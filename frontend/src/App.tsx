@@ -50,6 +50,7 @@ function App(){
   }
   useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();setCommandOpen(open=>!open)}if(event.key==='Escape')setCommandOpen(false)};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
   useEffect(()=>{api<User>('/auth/me').then(u=>{setUser(u);setScreen(u.role==='PM'?'overview':u.role==='MEMBER'?'mine':u.role==='ADMIN'?'accounts':'pending')}).catch(()=>{});},[]);
+  useEffect(()=>{if(!user)return;const id=Number(new URLSearchParams(window.location.search).get('task'));if(!Number.isSafeInteger(id)||id<=0)return;api<Task>(`/tasks/${id}`).then(task=>{if(!task.limited){setProjectId(task.project_id);setTaskId(id);setScreen('task')}}).catch(()=>{});},[user?.id]);
   async function run(action:()=>Promise<unknown>,success='Saved'){setError('');setMessage('');try{await action();setMessage(success);await qc.invalidateQueries();}catch(e){setError(e instanceof Error?e.message:String(e));}}
   function go(name:string){if(user?.role==='MEMBER'&&name==='pending'&&!canReview)return;setScreen(name);setTaskId(null);setTaskFilter('');setMessage('');setError('');}
   function goFilteredTasks(filter:string){setTaskFilter(filter);setScreen('tasks');setTaskId(null)}

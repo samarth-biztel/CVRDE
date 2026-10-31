@@ -47,6 +47,12 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-CVRDE Demo <no-reply@example.invalid>}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+      EMAIL_REDIRECT_TO: ${EMAIL_REDIRECT_TO:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://${DOMAIN:?set DOMAIN}}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
       DEMO_EMAIL_PM: ${DEMO_EMAIL_PM:-}
       DEMO_EMAIL_S1: ${DEMO_EMAIL_S1:-}
       DEMO_EMAIL_S2: ${DEMO_EMAIL_S2:-}
@@ -56,7 +62,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [app]
+    networks: [app, ingress]
 volumes:
   postgres_data:
   uploads:

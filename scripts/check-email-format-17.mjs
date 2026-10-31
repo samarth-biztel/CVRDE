@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {mailContent,emailEnabled} from '../backend/dist/email.js';
+process.env.PUBLIC_APP_URL='https://demo.example.invalid';
+process.env.EMAIL_REDIRECT_TO='team-inbox@example.invalid';
+const base={projectName:'Engine Development Programme',taskTitle:'Valve train kinematics simulation',taskId:42,recipientEmail:'owner@example.invalid',actorName:'A. Iyer',meetingTitle:null};
+for(const eventType of ['ASSIGNED','SUBMITTED','RETURNED','ACCEPTED','DUE_CHANGED','OWNER_CHANGED'])assert.equal(emailEnabled(eventType),true);
+assert.equal(emailEnabled('COMMENT'),false);
+const returned=mailContent({...base,eventType:'RETURNED',detail:'Correct the valve timing assumptions.'});
+assert.equal(returned.to,'team-inbox@example.invalid');
+assert.equal(returned.subject,'[Engine Development Programme] Returned: Valve train kinematics simulation');
+assert.match(returned.text,/By: A\. Iyer/);
+assert.match(returned.text,/Reason: Correct the valve timing assumptions/);
+assert.match(returned.text,/Open task: https:\/\/demo\.example\.invalid\/\?task=42/);
+assert.doesNotMatch(returned.text,/attachments|minutes text/i);
+const meeting=mailContent({...base,eventType:'ASSIGNED',detail:'',meetingTitle:'Design review'});
+assert.match(meeting.subject,/Meeting action assigned/);
+assert.match(meeting.text,/Meeting: Design review/);
+console.log('Email formatting #17 passed: event selection, redirect, actor, reason, meeting, and deep link.');

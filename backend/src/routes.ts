@@ -26,6 +26,12 @@ async function checkProjectDeadline(projectId:number,dueDate:string|null|undefin
   if(project?.target_date&&dueDate>=project.target_date.slice(0,10))throw new HttpError(400,'Task due date must be before the project deadline');
 }
 async function checkSubProjectDeadline(subProjectId:number|null|undefined,dueDate:string|null|undefined){if(!subProjectId||!dueDate)return;const sub=await subProjectById(subProjectId);if(dueDate>sub.due_date.slice(0,10))throw new HttpError(400,'Task due date must be on or before the sub-project due date');}
+async function notifyOwnerChanged(task:Task,newOwnerId:number,actorId:number){
+  const people=await query<{id:number;full_name:string}>(db,'SELECT id,full_name FROM users WHERE id=ANY($1::bigint[])',[[task.owner_id,newOwnerId]]);
+  const name=(id:number)=>people.find(person=>person.id===id)?.full_name||'A team member';
+  const detail=`${name(task.owner_id)} → ${name(newOwnerId)}`;
+  for(const recipient of new Set([task.owner_id,newOwnerId]))await notify('OWNER_CHANGED',recipient,task.id,`Owner changed: ${task.title}`,detail,actorId);
+}
 
 const attempts = new Map<string,{count:number;until:number}>();
 api.get('/auth/demo',(_req,res)=>{
@@ -178,7 +184,7 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
     const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
   });
-  await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Project ${pid}: ${task.title}`);
+  await notify('ASSIGNED',d.owner_id,task.id,`Task assigned: ${task.title}`,`Task assigned in project ${pid}`,u.id);
   send(res,task,201);
 }));
 api.get('/tasks/:taskId',handler(async(req,res)=>{
@@ -236,7 +242,9 @@ api.patch('/tasks/:taskId',handler(async(req,res)=>{
     const clause=updates.map(([k],i)=>`${k}=$${i+1}`).join(',');
     const row=await one(tx,`UPDATE tasks SET ${clause},updated_at=now() WHERE id=$${values.length+1} RETURNING *`,[...values,task.id]);
     await history(tx,task.project_id,task.id,'TASK_UPDATED',u.id,diff);return row;
-  });send(res,result);
+  });
+  if(d.due_date!==undefined&&(d.due_date||null)!==(task.due_date?.slice(0,10)||null))await notify('DUE_CHANGED',task.owner_id,task.id,`Due date changed: ${task.title}`,`${task.due_date?.slice(0,10)||'Not set'} → ${d.due_date||'Not set'}`,u.id);
+  send(res,result);
 }));
 api.patch('/tasks/:taskId/assignment',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));await canEditTask(u,task);
@@ -244,7 +252,7 @@ api.patch('/tasks/:taskId/assignment',handler(async(req,res)=>{
   if(owner_id!==u.id&&!await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[task.project_id,owner_id]))throw new HttpError(400,'Owner must belong to project');
   if(owner_id===task.owner_id)return send(res,{ok:true});
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[owner_id,task.id]);await history(tx,task.project_id,task.id,'TASK_REASSIGNED',u.id,{old:task.owner_id,new:owner_id});});
-  await notify('ASSIGNED',owner_id,task.id,`Task assigned: ${task.title}`,task.title);send(res,{ok:true});
+  await notifyOwnerChanged(task,owner_id,u.id);send(res,{ok:true});
 }));
 api.post('/tasks/:taskId/status',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(task.owner_id!==u.id)throw new HttpError(403,'Owner only');
@@ -257,7 +265,7 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
   const row=await db.transaction().execute(async tx=>{const item=await one(tx,'INSERT INTO task_comments(task_id,author_id,body) VALUES($1,$2,$3) RETURNING *',[task.id,u.id,body]);await history(tx,task.project_id,task.id,'COMMENT_ADDED',u.id,{comment_id:(item as {id:number}).id});return item;});
   const mentions=[...body.matchAll(/@([a-z0-9._-]+)/gi)].map(x=>x[1]!.toLowerCase());
   const mentioned=mentions.length?await query<{id:number}>(db,'SELECT u.id FROM users u JOIN project_members pm ON pm.user_id=u.id WHERE pm.project_id=$1 AND lower(u.username)=ANY($2::text[]) AND u.active',[task.project_id,mentions]):[];
-  for(const recipient of new Set([task.owner_id,task.manager_id,task.sub_project_owner_id,task.created_by,...mentioned.map(x=>x.id)].filter((value):value is number=>typeof value==='number')))if(recipient!==u.id)await notify('COMMENT',recipient,task.id,`New comment: ${task.title}`,body);
+  for(const recipient of new Set([task.owner_id,task.manager_id,task.sub_project_owner_id,task.created_by,...mentioned.map(x=>x.id)].filter((value):value is number=>typeof value==='number')))if(recipient!==u.id)await notify('COMMENT',recipient,task.id,`New comment: ${task.title}`,body,u.id);
   send(res,row,201);
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
@@ -322,7 +330,9 @@ api.post('/extension-requests/:requestId/decision',handler(async(req,res)=>{
   if(d.approve)await checkProjectDeadline(task.project_id,r.new_due_date);
   const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE due_date_extensions SET status=$1,decided_by=$2,decided_at=now(),decision_comment=$3 WHERE id=$4',[status,u.id,d.comment,r.id]);if(d.approve)await query(tx,'UPDATE tasks SET due_date=$1,updated_at=now() WHERE id=$2',[r.new_due_date,task.id]);await history(tx,task.project_id,task.id,'EXTENSION_DECIDED',u.id,{status,new_due_date:r.new_due_date,comment:d.comment});});
-  await notify('REQUEST_ANSWERED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status});
+  await notify('REQUEST_ANSWERED',r.requested_by,task.id,`Extension ${status.toLowerCase()}: ${task.title}`,d.comment || status,u.id);
+  if(d.approve)await notify('DUE_CHANGED',task.owner_id,task.id,`Due date changed: ${task.title}`,`${task.due_date?.slice(0,10)||'Not set'} → ${r.new_due_date.slice(0,10)}`,u.id);
+  send(res,{status});
 }));
 api.get('/tasks/:taskId/extensions',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM due_date_extensions WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
 
@@ -334,7 +344,7 @@ api.post('/tasks/:taskId/results',handler(async(req,res)=>{
     const r=await one(tx,`INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by) VALUES($1,(SELECT coalesce(max(version_no),0)+1 FROM task_results WHERE task_id=$1),$2,$3,$4) RETURNING *`,[task.id,d.work_completed,d.outcome,u.id]);
     const attached=await query(tx,'UPDATE attachments SET result_id=$1 WHERE id=ANY($2::bigint[]) AND task_id=$3 AND result_id IS NULL RETURNING id',[(r as {id:number}).id,d.attachment_ids,task.id]);if(attached.length!==d.attachment_ids.length)throw new HttpError(400,'Invalid submission files');
     await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'RESULT_SUBMITTED',u.id,{result_id:(r as {id:number}).id,version_no:(r as {version_no:number}).version_no,attachment_ids:d.attachment_ids,old:task.status,new:'SUBMITTED'});return r;
-  });await notify('SUBMITTED',task.created_by,task.id,`Result submitted: ${task.title}`,d.outcome);send(res,row,201);
+  });await notify('SUBMITTED',task.created_by,task.id,`Result submitted: ${task.title}`,d.outcome,u.id);send(res,row,201);
 }));
 api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,"SELECT r.*,(SELECT coalesce(array_agg(a.original_name ORDER BY a.id),'{}'::text[]) FROM attachments a WHERE a.result_id=r.id) AS attachment_names,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r WHERE r.task_id=$1 ORDER BY r.version_no DESC",[task.id]));}));
 api.post('/results/:resultId/review',handler(async(req,res)=>{
@@ -344,7 +354,7 @@ api.post('/results/:resultId/review',handler(async(req,res)=>{
   if(!d.accept&&!d.comment.trim())throw new HttpError(400,'A reason is required when returning work');
   const review=d.accept?'ACCEPTED':'RETURNED', status=d.accept?'DONE':'RETURNED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE task_results SET review_status=$1,review_comment=$2,reviewed_by=$3,reviewed_at=now() WHERE id=$4',[review,d.comment,u.id,rid]);await query(tx,'UPDATE tasks SET status=$1,updated_at=now() WHERE id=$2',[status,task.id]);await history(tx,task.project_id,task.id,'RESULT_REVIEWED',u.id,{result_id:rid,review,comment:d.comment,old:'SUBMITTED',new:status});});
-  await notify(review,r.submitted_by,task.id,`Result ${review.toLowerCase()}: ${task.title}`,d.comment || review);send(res,{review_status:review,status});
+  await notify(review,r.submitted_by,task.id,`Result ${review.toLowerCase()}: ${task.title}`,d.comment || review,u.id);send(res,{review_status:review,status});
 }));
 
 api.post('/tasks/:taskId/reassignments',handler(async(req,res)=>{
@@ -371,7 +381,9 @@ api.post('/reassignments/:requestId/decision',handler(async(req,res)=>{
   if(task.owner_id!==r.original_owner_id)throw new HttpError(409,'Task owner changed since request');
   const status=d.approve?'APPROVED':'REJECTED';
   await db.transaction().execute(async tx=>{await query(tx,'UPDATE reassignments SET status=$1,decided_at=now(),decided_by=$2,decision_comment=$3 WHERE id=$4',[status,u.id,d.comment,rid]);if(d.approve)await query(tx,'UPDATE tasks SET owner_id=$1,updated_at=now() WHERE id=$2',[r.new_owner_id,task.id]);await history(tx,task.project_id,task.id,'REASSIGNMENT_DECIDED',u.id,{status,old:r.original_owner_id,new:d.approve?r.new_owner_id:r.original_owner_id,comment:d.comment});});
-  for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REQUEST_ANSWERED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status);send(res,{status,work_from:r.work_from,work_until:r.work_until});
+  for(const target of new Set([r.original_owner_id,r.new_owner_id,task.manager_id]))await notify('REQUEST_ANSWERED',target,task.id,`Reassignment ${status.toLowerCase()}: ${task.title}`,d.comment || status,u.id);
+  if(d.approve)await notifyOwnerChanged(task,r.new_owner_id,u.id);
+  send(res,{status,work_from:r.work_from,work_until:r.work_until});
 }));
 api.get('/tasks/:taskId/reassignments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT * FROM reassignments WHERE task_id=$1 ORDER BY id DESC',[task.id]));}));
 

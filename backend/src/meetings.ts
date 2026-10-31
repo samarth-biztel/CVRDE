@@ -36,7 +36,7 @@ async function addActions(tx:Executor,meeting:Meeting,items:Action[],actorId:num
   }
   return taskIds;
 }
-async function notifyActions(items:Action[],ids:number[],meeting:Meeting){for(const [index,item] of items.entries())await notify('ASSIGNED',item.owner_id,ids[index]!,`Meeting action assigned: ${item.description}`,`From: ${source(meeting.title,meeting.meeting_date)}`);}
+async function notifyActions(items:Action[],ids:number[],meeting:Meeting,actorId:number){for(const [index,item] of items.entries())await notify('ASSIGNED',item.owner_id,ids[index]!,`Meeting action assigned: ${item.description}`,`From: ${source(meeting.title,meeting.meeting_date)}`,actorId);}
 
 meetingRoutes.get('/projects/:projectId/meetings',handler(async(req,res)=>{
   const user=currentUser(res),projectId=uid(req.params.projectId);await projectMember(user,projectId);
@@ -55,7 +55,7 @@ meetingRoutes.post('/projects/:projectId/meetings',handler(async(req,res)=>{
     await history(tx,projectId,null,'MEETING_CREATED',user.id,{meeting_id:meeting!.id,title:input.title,action_count:input.actions.length});
     return {meeting:meeting!,taskIds:await addActions(tx,meeting!,input.actions,user.id)};
   });
-  await notifyActions(input.actions,taskIds,meeting);res.status(201).json({id:meeting.id,task_ids:taskIds});
+  await notifyActions(input.actions,taskIds,meeting,user.id);res.status(201).json({id:meeting.id,task_ids:taskIds});
 }));
 meetingRoutes.get('/meetings/:meetingId',handler(async(req,res)=>{
   const user=currentUser(res),meeting=await meetingById(uid(req.params.meetingId)),project=await projectMember(user,meeting.project_id);
@@ -82,5 +82,5 @@ meetingRoutes.patch('/meetings/:meetingId',handler(async(req,res)=>{
 meetingRoutes.post('/meetings/:meetingId/actions',handler(async(req,res)=>{
   const user=currentUser(res),meeting=await meetingById(uid(req.params.meetingId));await editable(user,meeting.project_id,meeting.sub_project_id);
   const items=z.array(actionInput).min(1).parse(req.body?.actions);await validatePeople(meeting.project_id,[],items);await validateDates(meeting.project_id,meeting.sub_project_id,items);
-  const ids=await db.transaction().execute(tx=>addActions(tx,meeting,items,user.id));await notifyActions(items,ids,meeting);res.status(201).json({task_ids:ids});
+  const ids=await db.transaction().execute(tx=>addActions(tx,meeting,items,user.id));await notifyActions(items,ids,meeting,user.id);res.status(201).json({task_ids:ids});
 }));

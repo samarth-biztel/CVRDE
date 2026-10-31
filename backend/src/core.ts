@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import { db, one, query, type Executor } from './db.js';
-import nodemailer from 'nodemailer';
+import {emailEnabled,sendNotificationEmail} from './email.js';
 
 export type User = { id: number; username: string; full_name: string; email: string; role: 'ADMIN' | 'PM' | 'MEMBER' | 'REVIEWER' };
 export type Task = { id: number; project_id: number; sub_project_id: number | null; sub_project_owner_id: number | null; parent_task_id: number | null; milestone_id: number | null; risk_flag: boolean; risk_reason: string | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
@@ -87,20 +87,18 @@ export async function history(executor: Executor, projectId:number, taskId:numbe
   await query(executor,'INSERT INTO task_history(project_id,task_id,event_type,actor_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[projectId,taskId,eventType,actorId,JSON.stringify(details)]);
   await query(executor,'INSERT INTO audit_log(project_id,task_id,action,actor_id,details) VALUES($1,$2,$3,$4,$5::jsonb)',[projectId,taskId,eventType,actorId,JSON.stringify(details)]);
 }
-export async function notify(eventType:string, toUserId:number, taskId:number|null, subject:string, body:string) {
+export async function notify(eventType:string, toUserId:number, taskId:number|null, subject:string, body:string, actorId?:number) {
   try {
-    const recipient = await one<{email:string}>(db,'SELECT email FROM users WHERE id=$1',[toUserId]);
+    const recipient = await one<{email:string;task_title:string|null;project_name:string|null;meeting_title:string|null;actor_name:string|null}>(db,`SELECT u.email,t.title AS task_title,p.name AS project_name,t.source_meeting_title AS meeting_title,actor.full_name AS actor_name FROM users u LEFT JOIN tasks t ON t.id=$2 LEFT JOIN projects p ON p.id=t.project_id LEFT JOIN users actor ON actor.id=$3 WHERE u.id=$1 AND u.active`,[toUserId,taskId||null,actorId||null]);
     if (!recipient) return;
-    let delivery = 'SKIPPED', error: string | null = null;
-    if (process.env.SMTP_HOST) {
-      try {
-        const transport = nodemailer.createTransport({ host:process.env.SMTP_HOST, port:Number(process.env.SMTP_PORT || 587), secure:Number(process.env.SMTP_PORT)===465,
-          auth:process.env.SMTP_USER ? {user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD} : undefined });
-        await transport.sendMail({from:process.env.SMTP_FROM || 'CVRDE Demo <no-reply@example.invalid>',to:recipient.email,subject,text:body});
-        delivery = 'SENT';
-      } catch { delivery='FAILED'; error='Email delivery failed; check SMTP configuration'; }
+    const entry=await one<{id:number}>(db,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5) RETURNING id',[eventType,toUserId,taskId,subject,'SKIPPED']);
+    if(process.env.EMAIL_ENABLED!=='true'||!emailEnabled(eventType)||actorId===toUserId||!recipient.task_title||!recipient.project_name)return;
+    try{
+      await sendNotificationEmail({eventType,projectName:recipient.project_name,taskTitle:recipient.task_title,taskId:taskId!,recipientEmail:recipient.email,actorName:recipient.actor_name||'A team member',detail:body,meetingTitle:recipient.meeting_title});
+      await query(db,"UPDATE notification_log SET delivery_status='SENT' WHERE id=$1",[entry!.id]);
+    }catch(error){
+      await query(db,"UPDATE notification_log SET delivery_status='FAILED',error=$2 WHERE id=$1",[entry!.id,error instanceof Error?error.message.slice(0,250):'Email delivery failed']);
     }
-    await query(db,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status,error) VALUES($1,$2,$3,$4,$5,$6)',[eventType,toUserId,taskId,subject,delivery,error]);
   } catch {
     // Notification failures must not change the outcome of committed task work.
   }

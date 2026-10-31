@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {sendNotificationEmail} from '../backend/dist/email.js';
+process.env.EMAIL_PROVIDER='resend';
+process.env.RESEND_API_KEY='re_unit_test';
+process.env.RESEND_FROM='CVRDE Demo <demo@example.invalid>';
+process.env.EMAIL_REDIRECT_TO='team-inbox@example.invalid';
+process.env.PUBLIC_APP_URL='https://demo.example.invalid';
+const context={eventType:'RETURNED',projectName:'Engine Development Programme',taskTitle:'Valve train kinematics simulation',taskId:42,recipientEmail:'owner@example.invalid',actorName:'A. Iyer',detail:'Correct the boundary conditions.',meetingTitle:null};
+const original=globalThis.fetch;
+try{
+  let sent;
+  globalThis.fetch=async(url,options)=>{sent={url,options};return new Response(JSON.stringify({id:'email_test'}),{status:200,headers:{'Content-Type':'application/json'}})};
+  await sendNotificationEmail(context);
+  assert.equal(sent.url,'https://api.resend.com/emails');
+  assert.equal(sent.options.method,'POST');
+  assert.equal(sent.options.headers.Authorization,'Bearer re_unit_test');
+  const payload=JSON.parse(sent.options.body);
+  assert.equal(payload.from,'CVRDE Demo <demo@example.invalid>');
+  assert.deepEqual(payload.to,['team-inbox@example.invalid']);
+  assert.match(payload.subject,/Returned: Valve train kinematics simulation/);
+  assert.match(payload.text,/Reason: Correct the boundary conditions/);
+  assert.match(payload.text,/Open task: https:\/\/demo\.example\.invalid\/\?task=42/);
+  globalThis.fetch=async()=>new Response(JSON.stringify({message:'Verified sender required'}),{status:422,headers:{'Content-Type':'application/json'}});
+  await assert.rejects(sendNotificationEmail(context),/Resend delivery failed \(422\): Verified sender required/);
+  delete process.env.RESEND_API_KEY;
+  await assert.rejects(sendNotificationEmail(context),/RESEND_API_KEY is not configured/);
+  console.log('Resend #17 passed: request payload, team inbox redirect, provider error, and missing-key behavior.');
+}finally{globalThis.fetch=original}
