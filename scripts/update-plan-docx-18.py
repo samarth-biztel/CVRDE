@@ -27,6 +27,9 @@ try:
             data = source.read(info.filename)
             if info.filename == "word/document.xml":
                 xml = data.decode("utf-8")
+                if "Revision 5 — Approved CVRDE fictional demo scope" in xml:
+                    target.writestr(info, data)
+                    continue
                 insert = "".join(
                     f'<w:p><w:r><w:t xml:space="preserve">{escape(line)}</w:t></w:r></w:p>'
                     for line in paragraphs

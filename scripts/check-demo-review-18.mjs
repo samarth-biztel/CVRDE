@@ -30,5 +30,5 @@ try{
   assert.equal(await page.getByText('Linked to',{exact:true}).count(),0);
   assert.equal(await page.getByText(/"owner_id"/).count(),0,'task page must not show raw JSON');
   assert.equal(await page.getByText(/"task_id"/).count(),0,'task page must not show raw JSON');
-  console.log(`Issue #18 local checks passed at ${origin}: PM edit, owner 403, three risk rules visible.`);
+  console.log(`Issue #18 checks passed at ${origin}: PM edit, owner 403, three risk rules visible.`);
 }finally{await browser?.close();await Promise.all(contexts.map(context=>context.dispose()))}
