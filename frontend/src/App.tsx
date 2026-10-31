@@ -9,7 +9,7 @@ import {UserHome,UserTasks,MySubmissions} from './UserPages';
 import {MeetingDetail} from './Meetings';
 import {demoAccounts,demoPassword} from '../../backend/src/demo';
 import {demoMode} from './demoMode';
-import {ChartNoAxesCombined,FolderKanban,Inbox,LayoutDashboard,ListTodo,LogOut,Moon,PanelLeftClose,PanelLeftOpen,Search,Settings as SettingsIcon,Sun,Bell} from 'lucide-react';
+import {ChartNoAxesCombined,FolderKanban,Inbox,LayoutDashboard,ListTodo,LogOut,Moon,PanelLeftClose,PanelLeftOpen,Search,Settings as SettingsIcon,Sun,Bell,Eye,EyeOff} from 'lucide-react';
 import {motion,useReducedMotion} from 'motion/react';
 
 function Card({title,children,extra}:{title:string;children:ReactNode;extra?:ReactNode}){return <section className="card"><div className="card-head"><h2>{title}</h2>{extra}</div>{children}</section>}
@@ -80,14 +80,14 @@ function App(){
 }
 function Login({onLogin,theme,onThemeChange}:{onLogin:(u:User)=>void;theme:'light'|'dark';onThemeChange:(event:MouseEvent<HTMLButtonElement>)=>void}){
   const [error,setError]=useState(''),[loading,setLoading]=useState(false);
-  const [username,setUsername]=useState(''),[password,setPassword]=useState('');
+  const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[showPassword,setShowPassword]=useState(false);
   async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setLoading(true);setError('');try{onLogin(await post<User>('/auth/login',{username,password}));}catch(err){setError(err instanceof Error?err.message:'Login failed')}finally{setLoading(false)}}
   return <div className="login-wrap"><div className="login-panel">
     <div className="login-tools"><button data-testid="login-toggle-theme" className="theme-toggle" title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} onClick={onThemeChange}>{theme==='light'?<Moon size={18} strokeWidth={1.5}/>:<Sun size={18} strokeWidth={1.5}/>}</button></div>
     <div className="brand dark"><span className="brand-icon">C</span><div><strong>CVRDE</strong><small>Work Management Demo</small></div></div>
-    <span className="eyebrow">SECURE PROJECT WORKSPACE</span><h1>Welcome back</h1><p className="muted">Sign in to the engine component work management pilot.</p>
-    <div className="demo-logins"><strong>Explore as a demo user</strong><p>Choose a role to fill the sign in form.</p><div className="demo-login-grid">{demoAccounts.map(account=><button data-testid={`demo-${account.username.replaceAll('.','-')}`} type="button" key={account.username} onClick={()=>{setUsername(account.username);setPassword(demoPassword)}}><span>{account.label}</span><small>{account.username}</small></button>)}</div><small>Shared demo password: <code>{demoPassword}</code></small></div>
-    <form onSubmit={submit} className="stack"><label>Username<input data-testid="login-username" name="username" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required/></label><label>Password<input data-testid="login-password" name="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<div className="notice error">{error}</div>}<button data-testid="login-submit" className="primary" disabled={loading}>{loading?'Signing in…':'Sign in'}</button></form>
+    <span className="eyebrow">PROJECT WORKSPACE</span><h1>Welcome back</h1><p className="muted">Choose a demo role or sign in with your account.</p>
+    <div className="demo-logins"><strong>Explore the demo</strong><p>Select a person to fill in the sign-in form.</p><div className="demo-login-grid">{demoAccounts.map(account=><button data-testid={`demo-${account.username.replaceAll('.','-')}`} type="button" key={account.username} className={username===account.username?'selected':''} aria-pressed={username===account.username} onClick={()=>{setUsername(account.username);setPassword(demoPassword);setShowPassword(false);setError('')}}><span className="demo-login-avatar" aria-hidden="true">{account.label.charAt(0)}</span><span className="demo-login-name">{account.label}</span></button>)}</div></div>
+    <form onSubmit={submit} className="stack"><label>Username<input data-testid="login-username" name="username" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required/></label><div className="login-password-field"><label htmlFor="login-password">Password</label><div className="password-input"><input id="login-password" data-testid="login-password" name="password" type={showPassword?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" aria-label={showPassword?'Hide password':'Show password'} aria-pressed={showPassword} onClick={()=>setShowPassword(visible=>!visible)}>{showPassword?<EyeOff size={18} strokeWidth={1.7}/>:<Eye size={18} strokeWidth={1.7}/>}</button></div></div>{error&&<div className="notice error">{error}</div>}<button data-testid="login-submit" className="primary" disabled={loading}>{loading?'Signing in…':'Sign in'}</button></form>
     <p className="login-note">Fictional pilot data only</p>
   </div></div>;
 }
