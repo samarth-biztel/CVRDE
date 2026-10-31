@@ -4,7 +4,7 @@ import { db, one, query, type Executor } from './db.js';
 import nodemailer from 'nodemailer';
 
 export type User = { id: number; username: string; full_name: string; email: string; role: 'ADMIN' | 'PM' | 'MEMBER' | 'REVIEWER' };
-export type Task = { id: number; project_id: number; sub_project_id: number | null; sub_project_owner_id: number | null; parent_task_id: number | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
+export type Task = { id: number; project_id: number; sub_project_id: number | null; sub_project_owner_id: number | null; parent_task_id: number | null; milestone_id: number | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
 export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 export const assert = (value: unknown, status: number, message: string): asserts value => { if (!value) throw new HttpError(status, message); };
 export const uid = (value: unknown) => { const n = Number(value); if (!Number.isSafeInteger(n) || n <= 0) throw new HttpError(400, 'Invalid ID'); return n; };

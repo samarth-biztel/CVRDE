@@ -134,6 +134,9 @@ try{
     await work(testing,'Prepare dyno test plan','testing.demo',25,'NOT_STARTED');
     await work(testing,'Emissions test procedure','scientist2.demo',30,'NOT_STARTED');
     await work(testing,'Durability test plan','task2.demo',40,'NOT_STARTED');
+    const baselineMilestone=await one<{id:number}>(tx,'INSERT INTO milestones(project_id,name,due_date,created_by) VALUES($1,$2,$3,$4) RETURNING id',[programmeId,'Design baseline ready',day(15),ids['pm.demo']]);
+    await query(tx,'UPDATE tasks SET milestone_id=$1 WHERE id=ANY($2::bigint[])',[baselineMilestone!.id,[targets,piston,cfd,thermalHead]]);
+    await history(tx,programmeId,null,'MILESTONE_CREATED',ids['pm.demo'],{milestone_id:baselineMilestone!.id,name:'Design baseline ready',due_date:day(15)});
     async function evidence(taskId:number,owner:string,status:'PENDING'|'ACCEPTED'|'RETURNED',summary:string,fileName:string,comment?:string){
       const result=await one<{id:number}>(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,review_comment,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[taskId,summary,'Fictional engineering evidence attached.',ids[owner],status,comment||null,status==='PENDING'?null:ids['scientist1.demo'],status==='PENDING'?null:new Date()]);
       const contents=pdf(`Fictional CVRDE demo evidence: ${summary}`);

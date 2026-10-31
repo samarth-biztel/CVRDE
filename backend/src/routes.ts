@@ -6,6 +6,7 @@ import { db, one, query } from './db.js';
 import { authenticate, currentUser, getProject, handler, history, HttpError, issueSession, notify, projectManager, projectMember, role, taskAccess, taskById, uid, visibleTaskIds, type Task, type User } from './core.js';
 import { fileRoutes } from './files.js';
 import { meetingRoutes } from './meetings.js';
+import { milestoneRoutes } from './milestones.js';
 import { demoAccounts, demoPassword } from './demo.js';
 
 export const api = Router();
@@ -46,6 +47,7 @@ api.post('/auth/login',handler(async(req,res)=>{
 }));
 api.use(authenticate);
 api.use(meetingRoutes);
+api.use(milestoneRoutes);
 api.post('/auth/logout',handler(async(req,res)=>{
   const u=currentUser(res);
   const token=req.cookies?.cvrde_session;
