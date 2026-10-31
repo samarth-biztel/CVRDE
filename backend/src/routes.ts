@@ -72,7 +72,7 @@ api.get('/projects',handler(async(_req,res)=>{
   send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id) AS task_total,
     (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status='DONE') AS task_done,
-    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-interval '5 days')) AS at_risk
+    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day'))) AS at_risk
     FROM projects p JOIN users manager ON manager.id=p.manager_id LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
 }));
 api.post('/projects',handler(async(req,res)=>{
@@ -83,9 +83,9 @@ api.post('/projects',handler(async(req,res)=>{
 }));
 api.patch('/projects/:projectId',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
-  const changes=parse(z.object({name:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),target_date:z.string().date().optional()}).strict(),req.body);
+  const changes=parse(z.object({name:z.string().trim().min(1).max(200).optional(),description:z.string().max(10000).optional(),target_date:z.string().date().optional(),stale_after_days:z.number().int().min(1).max(60).optional()}).strict(),req.body);
   if(!Object.keys(changes).length)throw new HttpError(400,'No changes');
-  const current=await one<{name:string;description:string;target_date:string|null}>(db,'SELECT name,description,target_date FROM projects WHERE id=$1',[pid]);
+  const current=await one<{name:string;description:string;target_date:string|null;stale_after_days:number}>(db,'SELECT name,description,target_date,stale_after_days FROM projects WHERE id=$1',[pid]);
   // An increase can be used to repair a project that already has tasks beyond its old deadline.
   if(changes.target_date&&(!current?.target_date||changes.target_date<current.target_date)){
     const latest=await one<{due_date:string|null}>(db,`SELECT max(due_date)::text AS due_date FROM (
@@ -106,7 +106,7 @@ api.patch('/projects/:projectId',handler(async(req,res)=>{
   });
   send(res,updated);
 }));
-api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await getProject(pid));}));
+api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await one(db,'SELECT id,name,description,target_date,manager_id,stale_after_days FROM projects WHERE id=$1',[pid]));}));
 api.get('/projects/:projectId/sub-projects',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
   send(res,await query(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,(sp.owner_id=$2 OR EXISTS(SELECT 1 FROM projects p WHERE p.id=sp.project_id AND p.manager_id=$2) OR EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=sp.id AND own.owner_id=$2)) AS can_open FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.project_id=$1 GROUP BY sp.id,owner.full_name ORDER BY sp.due_date,sp.id`,[pid,u.id]));
@@ -475,11 +475,12 @@ api.get('/projects/:projectId/dashboard',handler(async(req,res)=>{
 }));
 api.get('/projects/:projectId/risk',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
-  const [tasks,activity,project]=await Promise.all([
-    query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at)) AS updated_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
+  const [tasks,activity,project,subProjects]=await Promise.all([
+    query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,t.source_meeting_title,greatest(t.created_at,t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.created_at)) AS last_activity_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
     query(db,`SELECT h.id,h.task_id,h.event_type,h.created_at,u.full_name AS actor_name,t.title AS task_title FROM task_history h JOIN users u ON u.id=h.actor_id LEFT JOIN tasks t ON t.id=h.task_id WHERE h.project_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 10`,[pid]),
-    one(db,'SELECT target_date FROM projects WHERE id=$1',[pid])
-  ]);send(res,{tasks,activity,deadline:project?.target_date||null});
+    one<{target_date:string|null;stale_after_days:number}>(db,'SELECT target_date,stale_after_days FROM projects WHERE id=$1',[pid]),
+    query(db,`SELECT sp.id,sp.name,sp.due_date,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,count(t.id) FILTER (WHERE t.status NOT IN ('DONE','SUBMITTED') AND t.due_date < CURRENT_DATE)::int AS overdue_count FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.project_id=$1 GROUP BY sp.id,owner.full_name ORDER BY sp.due_date NULLS LAST,sp.id`,[pid])
+  ]);send(res,{tasks,activity,deadline:project?.target_date||null,stale_after_days:project?.stale_after_days||14,sub_projects:subProjects});
 }));
 async function report(user:User,kind:'overdue'|'progress',params:Record<string,unknown>){
   role(user,['PM']);const projectId=id(params.project_id);await projectManager(user,projectId);
