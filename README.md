@@ -64,6 +64,8 @@ The [`deploy/`](deploy/) directory contains Docker/Caddy files for LAN hosting. 
 
 Email is a second channel for assignment, submission, return, sign-off, meeting action assignment, and task due date or owner changes. Comments stay in-app only. For the hosted demo, set `EMAIL_ENABLED=true`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and `RESEND_FROM` (a verified sender address). Set `PUBLIC_APP_URL` so links open the hosted task. Set `EMAIL_REDIRECT_TO` to the team inbox: the app keeps the intended recipient in its notification log while delivering all email to that inbox. Resend uses its [email API](https://resend.com/aws-lambda). `EMAIL_ENABLED=false` stops email and leaves in-app notifications active. Delivery errors are recorded as `FAILED` without reversing task work.
 
+The email has a compact HTML layout and a plain-text fallback. [Preview the returned-task email](docs/email-preview.png), or regenerate it with `npm run build --workspace backend` followed by `node scripts/preview-email-17.mjs`. Set `PUBLIC_APP_URL=https://biztel-ai-cvrde.vercel.app` even when sending from local Docker if the task button should open the hosted demo; the local test override `https://localhost` produces local links.
+
 For a future internal SMTP server, use `EMAIL_PROVIDER=smtp` with `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM`; set `SMTP_USER` and `SMTP_PASSWORD` if authentication is required.
 
 The Docker API joins the outbound network for an SMTP server on the LAN. Do not add SMTP credentials to Git; configure these values in the deployment environment. The test sink in [`scripts/smtp-sink-17.mjs`](scripts/smtp-sink-17.mjs) captures fictional messages locally for verification.

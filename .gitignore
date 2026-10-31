@@ -8,4 +8,5 @@ demo/email-capture.jsonl
 .local-pg/
 .npm-cache/
 *.tsbuildinfo
+docs/email-preview.html
 

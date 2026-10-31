@@ -18,8 +18,10 @@ try{
   assert.equal(payload.from,'CVRDE Demo <demo@example.invalid>');
   assert.deepEqual(payload.to,['team-inbox@example.invalid']);
   assert.match(payload.subject,/Returned: Valve train kinematics simulation/);
-  assert.match(payload.text,/Reason: Correct the boundary conditions/);
+  assert.match(payload.text,/Reviewer’s reason: Correct the boundary conditions/);
   assert.match(payload.text,/Open task: https:\/\/demo\.example\.invalid\/\?task=42/);
+  assert.match(payload.html,/href="https:\/\/demo\.example\.invalid\/\?task=42"/);
+  assert.match(payload.html,/View feedback/);
   globalThis.fetch=async()=>new Response(JSON.stringify({message:'Verified sender required'}),{status:422,headers:{'Content-Type':'application/json'}});
   await assert.rejects(sendNotificationEmail(context),/Resend delivery failed \(422\): Verified sender required/);
   delete process.env.RESEND_API_KEY;
