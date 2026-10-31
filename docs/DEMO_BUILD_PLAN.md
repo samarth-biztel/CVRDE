@@ -20,7 +20,7 @@ The at-risk panel includes overdue open tasks, tasks due within three days that 
 4. Notifications through the existing `notify()` path and `notification_log`, after commit. Bell and email share assignment, submission, return, resubmission, sign-off, and meeting action assignment events. Redirect demo email to one team inbox. The scripted hosted walkthrough checks the eight UI steps; the six email deliveries require live Resend credentials and a verified sender.
 5. Seed, hosted walkthrough recording, and cloud regression checks. Reset the fictional project after every walkthrough.
 
-The email channel is implemented with Resend support. Hosted delivery verification is pending `EMAIL_ENABLED=true`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM`, `EMAIL_REDIRECT_TO`, and `PUBLIC_APP_URL` in deployment secrets. No key belongs in Git.
+The email channel is implemented with Resend support. On 31 Oct 2026, the local Docker eight-step story produced six `SENT` notification-log records; Resend reported all six `delivered` to the configured team inbox. Hosted delivery verification is pending `EMAIL_ENABLED=true`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM`, `EMAIL_REDIRECT_TO`, and `PUBLIC_APP_URL` in each Vercel project's environment settings. No key belongs in Git.
 
 ## Known gaps and roadmap
 

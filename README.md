@@ -68,6 +68,8 @@ For a future internal SMTP server, use `EMAIL_PROVIDER=smtp` with `SMTP_HOST`, `
 
 The Docker API joins the outbound network for an SMTP server on the LAN. Do not add SMTP credentials to Git; configure these values in the deployment environment. The test sink in [`scripts/smtp-sink-17.mjs`](scripts/smtp-sink-17.mjs) captures fictional messages locally for verification.
 
+When running Compose from the repository root, pass `--env-file .env` before `-f deploy/docker-compose.yml`; otherwise Compose may use its defaults instead of the root email settings. For example: `docker compose --env-file .env -f deploy/docker-compose.yml up -d`. Vercel does not read this local file: set the same email variables in each hosted project's environment settings, using that deployment's own URL for `PUBLIC_APP_URL`.
+
 The hosted demo keeps groups, reassignment and extension requests, prerequisites, and linked task controls out of the interface while retaining their data and API support. Set `VITE_DEMO_MODE=false` at frontend build time to show those controls. The approved scope and deferred items are recorded in [`docs/DEMO_BUILD_PLAN.md`](docs/DEMO_BUILD_PLAN.md).
 
 ## Repository map
