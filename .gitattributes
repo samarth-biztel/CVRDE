@@ -10,3 +10,5 @@ Caddyfile text eol=lf
 *.docx binary
 *.pptx binary
 *.png binary
+*.pdf binary
+*.webm binary

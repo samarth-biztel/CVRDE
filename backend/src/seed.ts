@@ -31,16 +31,19 @@ function pdf(text:string){const safe=text.replace(/[()\\]/g,'');const stream=`BT
 try{
   await db.transaction().execute(async tx=>{
     const demoUsers:[string,string,string,string][]=[
-      ['pm.demo','Demo Project Manager','PM',process.env.DEMO_EMAIL_PM || 'pm.demo@example.invalid'],
-      ['scientist1.demo','Demo Scientist One','MEMBER',process.env.DEMO_EMAIL_S1 || 'scientist1.demo@example.invalid'],
-      ['scientist2.demo','Demo Scientist Two','MEMBER',process.env.DEMO_EMAIL_S2 || 'scientist2.demo@example.invalid'],
+      ['pm.demo','R. Sharma','PM',process.env.DEMO_EMAIL_PM || 'pm.demo@example.invalid'],
+      ['scientist1.demo','A. Iyer','MEMBER',process.env.DEMO_EMAIL_S1 || 'scientist1.demo@example.invalid'],
+      ['scientist2.demo','S. Nair','MEMBER',process.env.DEMO_EMAIL_S2 || 'scientist2.demo@example.invalid'],
+      ['prototype.demo','K. Menon','MEMBER','prototype.demo@example.invalid'],
+      ['testing.demo','P. Rao','MEMBER','testing.demo@example.invalid'],
+      ['task2.demo','V. Kulkarni','MEMBER','task2.demo@example.invalid'],
       ['reviewer.demo','Demo Reviewer','REVIEWER',process.env.DEMO_EMAIL_REVIEWER || 'reviewer.demo@example.invalid'],
       ['admin.demo','Demo Administrator','ADMIN','admin.demo@example.invalid']
     ];
     for(const [username,full_name,role,email] of demoUsers){
       const row=await one<{id:number}>(tx,`INSERT INTO users(username,password_hash,full_name,email,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash,full_name=excluded.full_name,email=excluded.email,role=excluded.role,active=true RETURNING id`,[username,hash,full_name,email,role]);ids[username]=row!.id;
     }
-    await query(tx,'DELETE FROM projects WHERE name=$1 AND manager_id=$2',[demo,ids['pm.demo']]);
+    await query(tx,'DELETE FROM projects WHERE name IN ($1,$2) AND manager_id=$3',[demo,'Engine Development Programme',ids['pm.demo']]);
     const project=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING id',[demo,'Fictional pilot project',day(60),ids['pm.demo']]);const pid=project!.id;
     for(const username of ['scientist1.demo','scientist2.demo'])await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2)',[pid,ids[username]]);
     const test=await one<{id:number}>(tx,'INSERT INTO project_groups(project_id,name,can_view_results,can_comment,can_link_pendency,created_by) VALUES($1,$2,true,true,true,$3) RETURNING id',[pid,'Test programme team',ids['pm.demo']]);
@@ -95,6 +98,58 @@ try{
     await history(tx,pid,sample,'TASK_UPDATED',ids['pm.demo'],{priority:{old:'LOW',new:'HIGH'}});
     await history(tx,pid,sample,'EXTENSION_REQUESTED',ids['scientist1.demo'],{old_due_date:day(-5),new_due_date:day(7)});
     await history(tx,pid,calibration,'PENDENCY_RAISED',ids['scientist1.demo'],{pendency_id:p!.id});
+
+    // The current fictional programme is inserted last so it opens first in the project switcher.
+    const programme=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING id',['Engine Development Programme','Fictional 1.5 L petrol engine research and development programme. All people, results, and documents are demonstration data.',day(90),ids['pm.demo']]);
+    const programmeId=programme!.id;
+    for(const name of ['scientist1.demo','prototype.demo','testing.demo','scientist2.demo','task2.demo'])await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2)',[programmeId,ids[name]]);
+    async function subProject(name:string,owner:string,dueOffset:number,objective:string){const row=await one<{id:number}>(tx,'INSERT INTO sub_projects(project_id,name,objective,owner_id,due_date) VALUES($1,$2,$3,$4,$5) RETURNING id',[programmeId,name,objective,ids[owner],day(dueOffset)]);await history(tx,programmeId,null,'SUB_PROJECT_CREATED',ids['pm.demo'],{sub_project_id:row!.id,name,owner_id:ids[owner]});return row!.id;}
+    const design=await subProject('Design & Simulation','scientist1.demo',45,'Validate the engine design through analysis and simulation before prototype release.');
+    const prototype=await subProject('Prototype Build','prototype.demo',60,'Source components and assemble the first instrumented engine prototype.');
+    const testing=await subProject('Testing & Validation','testing.demo',80,'Prepare dynamometer, emissions, and durability validation plans.');
+    async function work(subProjectId:number,title:string,owner:string,dueOffset:number,status:string,priority='MEDIUM',creator?:string,meetingId?:number,meetingSource?:string){
+      const assignedBy=creator||({[design]:'scientist1.demo',[prototype]:'prototype.demo',[testing]:'testing.demo'} as Record<number,string>)[subProjectId];
+      const row=await one<{id:number}>(tx,`INSERT INTO tasks(project_id,sub_project_id,title,description,expected_deliverables,owner_id,priority,due_date,status,created_by,source_meeting_id,source_meeting_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,[programmeId,subProjectId,title,`Fictional engineering task: ${title}.`,`Upload a short report or drawing showing the result of ${title.toLowerCase()}.`,ids[owner],priority,day(dueOffset),status,ids[assignedBy!],meetingId||null,meetingSource||null]);
+      await history(tx,programmeId,row!.id,'TASK_CREATED',ids[assignedBy!],{title,owner_id:ids[owner],source_meeting_id:meetingId||null});return row!.id;
+    }
+    const targets=await work(design,'Define engine performance targets','scientist2.demo',-25,'DONE');
+    const piston=await work(design,'Piston design and FEA','task2.demo',-18,'DONE');
+    const cfd=await work(design,'Combustion chamber CFD simulation','scientist2.demo',3,'SUBMITTED','HIGH');
+    const thermalHead=await work(design,'Cylinder head thermal analysis','task2.demo',4,'RETURNED','HIGH');
+    await work(design,'Crankshaft stress analysis','task2.demo',-2,'IN_PROGRESS','HIGH');
+    await work(design,'Cooling jacket design','scientist2.demo',6,'IN_PROGRESS');
+    await work(design,'Friction loss estimation','task2.demo',12,'NOT_STARTED');
+    const meetingDate=day(-14),meetingTitle='Design review – Design & Simulation';
+    const meeting=await one<{id:number}>(tx,'INSERT INTO meetings(project_id,sub_project_id,title,meeting_date,minutes,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6,now()-interval \'14 days\') RETURNING id',[programmeId,design,meetingTitle,meetingDate,'Reviewed simulation targets and agreed to update inputs before the next CFD review. A. Iyer will share assumptions with Testing & Validation.',ids['pm.demo']]);
+    for(const name of ['pm.demo','scientist1.demo','scientist2.demo','task2.demo'])await query(tx,'INSERT INTO meeting_attendees(meeting_id,user_id) VALUES($1,$2)',[meeting!.id,ids[name]]);
+    await history(tx,programmeId,null,'MEETING_CREATED',ids['pm.demo'],{meeting_id:meeting!.id,title:meetingTitle,action_count:2});
+    const sourceDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(meetingDate+'T00:00:00Z'));
+    const meetingSource=`${meetingTitle}, ${sourceDate}`;
+    const inputAction=await work(design,'Update simulation inputs with revised targets','scientist1.demo',-5,'DONE','MEDIUM','pm.demo',meeting!.id,meetingSource);
+    await work(design,'Share CFD assumptions with Testing team','scientist1.demo',5,'IN_PROGRESS','MEDIUM','pm.demo',meeting!.id,meetingSource);
+    await work(prototype,'Vendor selection for cylinder block casting','prototype.demo',-12,'DONE');
+    await work(prototype,'Procure prototype components','task2.demo',-5,'DONE');
+    await work(prototype,'Assemble first prototype engine','prototype.demo',10,'IN_PROGRESS','HIGH');
+    await work(prototype,'Instrumentation for prototype','task2.demo',20,'NOT_STARTED');
+    await work(testing,'Prepare dyno test plan','testing.demo',25,'NOT_STARTED');
+    await work(testing,'Emissions test procedure','scientist2.demo',30,'NOT_STARTED');
+    await work(testing,'Durability test plan','task2.demo',40,'NOT_STARTED');
+    async function evidence(taskId:number,owner:string,status:'PENDING'|'ACCEPTED'|'RETURNED',summary:string,fileName:string,comment?:string){
+      const result=await one<{id:number}>(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,review_comment,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[taskId,summary,'Fictional engineering evidence attached.',ids[owner],status,comment||null,status==='PENDING'?null:ids['scientist1.demo'],status==='PENDING'?null:new Date()]);
+      const contents=pdf(`Fictional CVRDE demo evidence: ${summary}`);
+      await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10)',[programmeId,taskId,result!.id,`task:${taskId}:evidence`,fileName,randomUUID(),'application/pdf',contents.length,ids[owner],contents]);
+      await history(tx,programmeId,taskId,'RESULT_SUBMITTED',ids[owner],{result_id:result!.id,version_no:1});
+      if(status!=='PENDING')await history(tx,programmeId,taskId,'RESULT_REVIEWED',ids['scientist1.demo'],{result_id:result!.id,review:status,comment:comment||''});
+    }
+    await evidence(targets,'scientist2.demo','ACCEPTED','Performance targets defined','performance-targets.pdf');
+    await evidence(piston,'task2.demo','ACCEPTED','Piston design and FEA complete','piston-fea-report.pdf');
+    await evidence(cfd,'scientist2.demo','PENDING','CFD simulation submitted for review','combustion-cfd-report.pdf');
+    await evidence(thermalHead,'task2.demo','RETURNED','Thermal analysis requires revised inputs','cylinder-head-thermal-report.pdf',"Boundary conditions don't match revised targets");
+    await evidence(inputAction,'scientist1.demo','ACCEPTED','Simulation inputs updated','updated-simulation-inputs.pdf');
+    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['SUBMITTED',ids['scientist1.demo'],cfd,'Result submitted: Combustion chamber CFD simulation','SKIPPED']);
+    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],thermalHead,'Result returned: Cylinder head thermal analysis','SKIPPED']);
+    const brief=pdf('Fictional Engine Development Programme design brief. No real CVRDE or DRDO data.');
+    await query(tx,'INSERT INTO attachments(project_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)',[programmeId,'project:design_brief','engine-design-brief.pdf',randomUUID(),'application/pdf',brief.length,ids['pm.demo'],brief]);
   });
   console.log(`Demo project reset; usernames: ${Object.keys(ids).join(', ')}. Public demo password: ${demoPassword}.`);
 }finally{await pool.end();}

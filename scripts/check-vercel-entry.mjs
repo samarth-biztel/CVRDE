@@ -19,7 +19,7 @@ try{
   assert.deepEqual(await health.json(),{ok:true});
   const demo=await fetch(`${base}/demo`);
   assert.equal(demo.status,200);
-  assert.equal((await demo.json()).accounts.length,4);
+  assert.equal((await demo.json()).accounts.length,6);
   const savedDatabaseUrl=process.env.DATABASE_URL;
   process.env.DATABASE_URL='';
   try{

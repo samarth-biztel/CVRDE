@@ -13,7 +13,7 @@ try{
   const demo=await fetch(`${base}/api/v1/auth/demo`);
   assert.equal(demo.status,200);
   const credentials=await demo.json();
-  assert.equal(credentials.accounts.length,4);
+  assert.equal(credentials.accounts.length,6);
   const login=await fetch(`${base}/api/v1/auth/login`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:'pm.demo',password:credentials.password})});
   assert.equal(login.status,200);
   const cookie=login.headers.get('set-cookie')?.split(';')[0];
