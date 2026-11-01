@@ -24,7 +24,7 @@ Copy [`.env.example`](../.env.example) to a root `.env` for local API developmen
 
 ## 🎭 Demo mode
 
-The code treats **any value other than the exact string `false` as demo mode on**. In the default build, the UI hides groups, linked-task controls, prerequisites, and reassignment and due-date extension requests. Their tables and API endpoints remain. API permission checks still apply. This follows [Issue #18](https://github.com/biztel-engg/ProjMgmtSoftware/issues/18) and the [approved plan](DEMO_BUILD_PLAN.md).
+The code treats **any value other than the exact string `false` as demo mode on**. In the default build, the UI hides groups, linked-task editing, full prerequisite editing on task detail, and reassignment and due-date extension requests. Task owners can still raise dependencies from a limited sub-project task view. Their tables and API endpoints remain. API permission checks still apply. The earlier [approved plan](DEMO_BUILD_PLAN.md) was updated by the later role-scope decision.
 
 To show the controls locally in PowerShell, set the variable **before starting or building Vite**:
 

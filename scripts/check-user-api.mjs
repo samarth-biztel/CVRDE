@@ -21,7 +21,7 @@ try{
   assert.equal((await call(viewer,`/tasks/${material.id}/status`,'post',{})).status(),403);
   assert.equal((await call(viewer,`/tasks/${material.id}/progress`,'post',{percent:70,justification:'Viewer attempt'})).status(),403);
   assert.equal((await call(viewer,`/tasks/${material.id}/results`,'post',{work_completed:'Viewer attempt',outcome:'Viewer attempt'})).status(),403);
-  assert.equal((await call(viewer,`/tasks/${material.id}/comments`,'post',{body:'Shared comment check'})).status(),201);
+  assert.equal((await call(viewer,`/tasks/${material.id}/comments`,'post',{body:'Peer comment attempt'})).status(),404);
   const pending=(await (await call(pm,'/me/pending-actions')).json()).find(a=>a.kind==='RESULT_REVIEW'&&a.title==='Instrumentation readiness review');assert.ok(pending);
   assert.equal((await call(viewer,`/results/${pending.id}/review`,'post',{accept:true,comment:'Viewer attempt'})).status(),404);
   const returned=await call(pm,`/results/${pending.id}/review`,'post',{accept:false,comment:'Please revise the channel map'});assert.equal(returned.status(),200,await returned.text());
@@ -39,5 +39,5 @@ try{
   assert.ok((await (await call(owner,'/me/submissions')).json()).some(s=>s.kind==='EXTENSION'&&s.state==='APPROVED'&&s.reviewer_comment==='Approved for the new sample batch'));
   assert.ok((await (await call(viewer,'/me/submissions')).json()).some(s=>s.kind==='EXTENSION'&&s.state==='REJECTED'&&s.reviewer_comment==='Please keep the original date'));
   assert.ok((await (await call(pm,'/me/submissions')).json()).some(s=>s.kind==='REASSIGNMENT'));
-  console.log('User API check passed: owner-only work, submissions and comments, returned reason, resubmission, shared permission denials, and Review denial.');
+  console.log('User API check passed: owner-only work, submissions, returned reason, resubmission, peer-task permission denials, and Review denial.');
 }finally{await Promise.all(contexts.map(ctx=>ctx.dispose()))}

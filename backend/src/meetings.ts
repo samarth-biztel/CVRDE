@@ -40,10 +40,11 @@ async function notifyActions(items:Action[],ids:number[],meeting:Meeting,actorId
 
 meetingRoutes.get('/projects/:projectId/meetings',handler(async(req,res)=>{
   const user=currentUser(res),projectId=uid(req.params.projectId);await projectMember(user,projectId);
-  res.json(await query(db,`SELECT m.id,m.project_id,m.sub_project_id,m.title,m.meeting_date,m.minutes,m.created_at,sp.name AS sub_project_name,u.full_name AS created_by_name,count(t.id)::int AS action_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS action_done FROM meetings m LEFT JOIN sub_projects sp ON sp.id=m.sub_project_id JOIN users u ON u.id=m.created_by LEFT JOIN tasks t ON t.source_meeting_id=m.id WHERE m.project_id=$1 GROUP BY m.id,sp.name,u.full_name ORDER BY m.meeting_date DESC,m.id DESC`,[projectId]));
+  res.json(await query(db,`SELECT m.id,m.project_id,m.sub_project_id,m.title,m.meeting_date,m.minutes,m.created_at,sp.name AS sub_project_name,u.full_name AS created_by_name,count(t.id)::int AS action_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS action_done FROM meetings m LEFT JOIN sub_projects sp ON sp.id=m.sub_project_id JOIN users u ON u.id=m.created_by LEFT JOIN tasks t ON t.source_meeting_id=m.id WHERE m.project_id=$1 AND ($3='PM' OR sp.owner_id=$2) GROUP BY m.id,sp.name,u.full_name ORDER BY m.meeting_date DESC,m.id DESC`,[projectId,user.id,user.role]));
 }));
 meetingRoutes.get('/sub-projects/:subProjectId/meetings',handler(async(req,res)=>{
-  const user=currentUser(res),subProjectId=uid(req.params.subProjectId);const sub=await one<{project_id:number}>(db,'SELECT project_id FROM sub_projects WHERE id=$1',[subProjectId]);if(!sub)throw new HttpError(404,'Sub-project not found');await projectMember(user,sub.project_id);
+  const user=currentUser(res),subProjectId=uid(req.params.subProjectId);const sub=await one<{project_id:number;owner_id:number}>(db,'SELECT project_id,owner_id FROM sub_projects WHERE id=$1',[subProjectId]);if(!sub)throw new HttpError(404,'Sub-project not found');await projectMember(user,sub.project_id);
+  if(user.role==='MEMBER'&&sub.owner_id!==user.id)throw new HttpError(404,'Sub-project not found');
   res.json(await query(db,`SELECT m.id,m.project_id,m.sub_project_id,m.title,m.meeting_date,m.minutes,m.created_at,count(t.id)::int AS action_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS action_done FROM meetings m LEFT JOIN tasks t ON t.source_meeting_id=m.id WHERE m.sub_project_id=$1 GROUP BY m.id ORDER BY m.meeting_date DESC,m.id DESC`,[subProjectId]));
 }));
 meetingRoutes.post('/projects/:projectId/meetings',handler(async(req,res)=>{
@@ -59,6 +60,8 @@ meetingRoutes.post('/projects/:projectId/meetings',handler(async(req,res)=>{
 }));
 meetingRoutes.get('/meetings/:meetingId',handler(async(req,res)=>{
   const user=currentUser(res),meeting=await meetingById(uid(req.params.meetingId)),project=await projectMember(user,meeting.project_id);
+  if(user.role==='MEMBER'&&!await one(db,`SELECT 1 WHERE
+    EXISTS(SELECT 1 FROM sub_projects WHERE id=$1 AND owner_id=$2)`,[meeting.sub_project_id,user.id]))throw new HttpError(404,'Meeting not found');
   const canEdit=user.role==='PM'&&project.manager_id===user.id||!!meeting.sub_project_id&&!!await one(db,'SELECT 1 FROM sub_projects WHERE id=$1 AND owner_id=$2',[meeting.sub_project_id,user.id]);
   const [attendees,actions]=await Promise.all([
     query(db,'SELECT u.id,u.full_name FROM meeting_attendees ma JOIN users u ON u.id=ma.user_id WHERE ma.meeting_id=$1 ORDER BY u.full_name',[meeting.id]),

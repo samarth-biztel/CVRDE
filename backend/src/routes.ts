@@ -80,10 +80,16 @@ api.post('/projects/:projectId/users',handler(async(req,res)=>{
 api.get('/projects',handler(async(_req,res)=>{
   const u=currentUser(res);
   send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
-    (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id) AS task_total,
-    (SELECT count(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status='DONE') AS task_done,
-    EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR (t.status<>'SUBMITTED' AND greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day')))) AS at_risk
-    FROM projects p JOIN users manager ON manager.id=p.manager_id LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.manager_id=$1 OR pm.user_id=$1 ORDER BY p.id DESC`,[u.id]));
+    (SELECT count(*)::int FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1)) AS task_total,
+    (SELECT count(*)::int FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND t.status='DONE' AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1)) AS task_done,
+    EXISTS(SELECT 1 FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1) AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR (t.status<>'SUBMITTED' AND greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day')))) AS at_risk
+    FROM projects p JOIN users manager ON manager.id=p.manager_id
+    WHERE $2='PM' OR p.manager_id=$1
+      OR ($2='MEMBER' AND (
+        EXISTS(SELECT 1 FROM sub_projects sp WHERE sp.project_id=p.id AND sp.owner_id=$1)
+        OR EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.owner_id=$1)))
+      OR ($2='REVIEWER' AND EXISTS(SELECT 1 FROM project_members pm WHERE pm.project_id=p.id AND pm.user_id=$1))
+    ORDER BY p.id DESC`,[u.id,u.role]));
 }));
 api.post('/projects',handler(async(req,res)=>{
   const u=currentUser(res);role(u,['PM']);
@@ -119,7 +125,12 @@ api.patch('/projects/:projectId',handler(async(req,res)=>{
 api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await one(db,'SELECT id,name,description,target_date,manager_id,stale_after_days FROM projects WHERE id=$1',[pid]));}));
 api.get('/projects/:projectId/sub-projects',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
-  send(res,await query(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,(sp.owner_id=$2 OR EXISTS(SELECT 1 FROM projects p WHERE p.id=sp.project_id AND p.manager_id=$2) OR EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=sp.id AND own.owner_id=$2)) AS can_open FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.project_id=$1 GROUP BY sp.id,owner.full_name ORDER BY sp.due_date,sp.id`,[pid,u.id]));
+  const rows=await query(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,true AS can_open
+    FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id
+    WHERE sp.project_id=$1 AND ($3='PM' OR sp.owner_id=$2
+      OR EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=sp.id AND own.owner_id=$2))
+    GROUP BY sp.id,owner.full_name ORDER BY sp.due_date,sp.id`,[pid,u.id,u.role]);
+  send(res,u.role==='MEMBER'?rows.map(row=>Number(row.owner_id)===u.id?row:{id:row.id,project_id:row.project_id,name:row.name,owner_id:row.owner_id,owner_name:row.owner_name,due_date:row.due_date,can_open:true}):rows);
 }));
 api.post('/projects/:projectId/sub-projects',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);const d=parse(subProjectInput,req.body);
@@ -132,7 +143,8 @@ api.get('/sub-projects/:subProjectId',handler(async(req,res)=>{
   const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await projectMember(u,sp.project_id);
   const project=await getProject(sp.project_id);
   if(u.id!==project.manager_id&&u.id!==sp.owner_id&&!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[sp.id,u.id]))throw new HttpError(404,'Sub-project not found');
-  const row=await one(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.id=$1 GROUP BY sp.id,owner.full_name`,[sp.id]);send(res,row);
+  const row=await one(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.id=$1 GROUP BY sp.id,owner.full_name`,[sp.id]);
+  send(res,u.role==='MEMBER'&&sp.owner_id!==u.id?{id:row?.id,project_id:row?.project_id,name:row?.name,owner_id:row?.owner_id,owner_name:row?.owner_name,due_date:row?.due_date}:row);
 }));
 api.patch('/sub-projects/:subProjectId',handler(async(req,res)=>{
   const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));const project=await projectMember(u,sp.project_id);if(u.role!=='PM'||project.manager_id!==u.id)throw new HttpError(403,'Only the PM can edit sub-project details');
@@ -145,6 +157,9 @@ api.get('/sub-projects/:subProjectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await projectMember(u,sp.project_id);
   const project=await getProject(sp.project_id);
   if(u.id!==project.manager_id&&u.id!==sp.owner_id&&!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[sp.id,u.id]))throw new HttpError(404,'Sub-project not found');
+  if(u.role==='MEMBER'&&sp.owner_id!==u.id){
+    return send(res,await query(db,'SELECT t.id,t.project_id,t.sub_project_id,t.title,t.status,t.owner_id,owner.full_name AS owner_name,t.due_date,sp.name AS sub_project_name FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.sub_project_id=$1 ORDER BY t.due_date NULLS LAST,t.id',[sp.id]));
+  }
   send(res,await query(db,'SELECT t.*,owner.full_name AS owner_name,sp.name AS sub_project_name FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.sub_project_id=$1 ORDER BY t.due_date NULLS LAST,t.id',[sp.id]));
 }));
 api.post('/projects/:projectId/members',handler(async(req,res)=>{
@@ -153,7 +168,19 @@ api.post('/projects/:projectId/members',handler(async(req,res)=>{
   const member=await one<User>(db,"SELECT * FROM users WHERE id=$1 AND role='MEMBER' AND active",[user_id]);if(!member)throw new HttpError(400,'Active member required');
   await db.transaction().execute(async tx=>{await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);await history(tx,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});});send(res,{ok:true},201);
 }));
-api.get('/projects/:projectId/members',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await query(db,'SELECT u.id,u.full_name,u.username,u.role FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 ORDER BY u.id',[pid]));}));
+api.get('/projects/:projectId/members',handler(async(req,res)=>{
+  const u=currentUser(res),pid=id(req.params.projectId),project=await projectMember(u,pid);
+  if(u.role==='MEMBER'&&!await one(db,'SELECT 1 FROM sub_projects WHERE project_id=$1 AND owner_id=$2 LIMIT 1',[pid,u.id])){
+    return send(res,await query(db,`SELECT DISTINCT person.id,person.full_name,person.username,person.role FROM users person
+      WHERE person.id=$3 OR person.id=$2
+        OR EXISTS(SELECT 1 FROM tasks peer WHERE peer.owner_id=person.id AND peer.project_id=$1 AND EXISTS(
+          SELECT 1 FROM tasks own WHERE own.owner_id=$2 AND own.sub_project_id=peer.sub_project_id AND own.sub_project_id IS NOT NULL))
+        OR EXISTS(SELECT 1 FROM sub_projects sp WHERE sp.owner_id=person.id AND sp.project_id=$1 AND EXISTS(
+          SELECT 1 FROM tasks own WHERE own.owner_id=$2 AND own.sub_project_id=sp.id))
+      ORDER BY person.id`,[pid,u.id,project.manager_id]));
+  }
+  send(res,await query(db,'SELECT u.id,u.full_name,u.username,u.role FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 ORDER BY u.id',[pid]));
+}));
 api.delete('/projects/:projectId/members/:userId',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId),memberId=id(req.params.userId);await projectManager(u,pid);
   if(await one(db,'SELECT 1 FROM tasks WHERE project_id=$1 AND owner_id=$2 LIMIT 1',[pid,memberId]))throw new HttpError(409,'Reassign this member’s tasks before removal');
@@ -163,11 +190,19 @@ api.delete('/projects/:projectId/members/:userId',handler(async(req,res)=>{
 
 api.get('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
-  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND (p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id]));
+  if(req.query.scope==='dependencies'){
+    role(u,['MEMBER']);
+    return send(res,await query(db,`SELECT t.id,t.project_id,t.sub_project_id,t.title,t.status,t.owner_id,owner.full_name AS owner_name,t.due_date,sp.name AS sub_project_name
+      FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id
+      WHERE t.project_id=$1 AND t.owner_id<>$2 AND EXISTS(
+        SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)
+      ORDER BY sp.name,t.due_date NULLS LAST,t.id`,[pid,u.id]));
+  }
+  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND ($3='PM' OR p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR ($3='REVIEWER' AND t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id,u.role]));
 }));
 api.get('/tasks/mine',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['MEMBER']);
-  send(res,await query(db,`SELECT t.*,p.name AS project_name,sp.name AS sub_project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.owner_id=$1 OR sp.owner_id=$1 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$1)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$1)) ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
+  send(res,await query(db,`SELECT t.*,p.name AS project_name,sp.name AS sub_project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.owner_id=$1 OR sp.owner_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
 }));
 api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
@@ -199,11 +234,11 @@ api.get('/tasks/:taskId',handler(async(req,res)=>{
   send(res,{...task,project_name:project.name,sub_project_name:subProject?.name||null,owner_name:people.find(p=>p.id===task.owner_id)?.full_name,assigned_by_name:people.find(p=>p.id===task.created_by)?.full_name,subtask_count:subtasks[0]});
 }));
 api.get('/tasks/:taskId/subtasks',handler(async(req,res)=>{
-  const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'VIEW');
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');
   send(res,await query(db,`SELECT t.id,t.title,t.description,t.owner_id,u.full_name AS owner_name,t.due_date,t.status,t.priority FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.parent_task_id=$1 AND (t.owner_id=$2 OR $2=$3 OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[task.id,u.id,task.manager_id]));
 }));
 api.get('/tasks/:taskId/prerequisites',handler(async(req,res)=>{
-  const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'VIEW');
+  const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');
   send(res,await query(db,`SELECT p.id,p.description,p.status,p.type,p.responsible_user_id,d.depends_on_task_id,t.title AS depends_on_title,t.status AS depends_on_status,(p.status='OPEN') AS blocked FROM pendencies p JOIN pendency_dependencies d ON d.pendency_id=p.id JOIN tasks t ON t.id=d.depends_on_task_id WHERE p.blocked_task_id=$1 ORDER BY p.created_at,p.id`,[task.id]));
 }));
 api.post('/tasks/:taskId/progress',handler(async(req,res)=>{
@@ -390,7 +425,7 @@ api.get('/tasks/:taskId/reassignments',handler(async(req,res)=>{const u=currentU
 api.post('/pendencies',handler(async(req,res)=>{
   const u=currentUser(res),d=parse(z.object({blocked_task_id:z.number().int().positive(),depends_on_task_ids:z.array(z.number().int().positive()).min(1),responsible_user_id:z.number().int().positive(),type:z.enum(['ACTION','CLARIFICATION','APPROVAL']),description:nonempty,needs_approval:z.boolean().default(true)}),req.body);
   const blocked=await taskById(d.blocked_task_id);if(blocked.owner_id!==u.id)throw new HttpError(403,'Only owner may raise pendency');
-  for(const dependencyId of d.depends_on_task_ids){const task=await taskById(dependencyId);if(task.project_id!==blocked.project_id || task.id===blocked.id)throw new HttpError(400,'Invalid dependency');await taskAccess(u,task,'LINK');}
+  for(const dependencyId of d.depends_on_task_ids){const task=await taskById(dependencyId);if(task.project_id!==blocked.project_id || task.sub_project_id!==blocked.sub_project_id || !task.sub_project_id || task.id===blocked.id)throw new HttpError(400,'Dependency must be another task in the same sub-project');await taskAccess(u,task,'LINK');}
   const responsible=await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[blocked.project_id,d.responsible_user_id]);if(!responsible)throw new HttpError(400,'Responsible user must belong to project');
   const row=await db.transaction().execute(async tx=>{const p=await one<{id:number}>(tx,'INSERT INTO pendencies(raised_by,blocked_task_id,responsible_user_id,type,description,needs_approval,approver_id,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[u.id,blocked.id,d.responsible_user_id,d.type,d.description,d.needs_approval,blocked.manager_id,d.needs_approval?'AWAITING_APPROVAL':'OPEN']);for(const dep of [...new Set(d.depends_on_task_ids)])await query(tx,'INSERT INTO pendency_dependencies(pendency_id,depends_on_task_id) VALUES($1,$2)',[p!.id,dep]);await history(tx,blocked.project_id,blocked.id,'PENDENCY_RAISED',u.id,{pendency_id:p!.id,dependencies:d.depends_on_task_ids});return p;});
   await notify('PENDENCY_RAISED',d.needs_approval?blocked.manager_id:d.responsible_user_id,blocked.id,`Pendency: ${blocked.title}`,d.description);send(res,row,201);
@@ -503,7 +538,7 @@ api.get('/projects/:projectId/dashboard',handler(async(req,res)=>{
   send(res,{total,overdue,by_status:byStatus,by_owner:byOwner,completed:byStatus.DONE || 0,pending:total-(byStatus.DONE || 0)});
 }));
 api.get('/projects/:projectId/risk',handler(async(req,res)=>{
-  const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
+  const u=currentUser(res),pid=id(req.params.projectId);role(u,['PM']);await projectMember(u,pid);
   const [tasks,activity,project,subProjects]=await Promise.all([
     query(db,`SELECT t.id,t.title,t.owner_id,t.status,t.due_date,t.risk_flag,t.risk_reason,t.source_meeting_title,greatest(t.created_at,t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.created_at)) AS last_activity_at,u.full_name AS owner_name FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.project_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[pid]),
     query(db,`SELECT h.id,h.task_id,h.event_type,h.created_at,u.full_name AS actor_name,t.title AS task_title FROM task_history h JOIN users u ON u.id=h.actor_id LEFT JOIN tasks t ON t.id=h.task_id WHERE h.project_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 10`,[pid]),

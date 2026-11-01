@@ -8,9 +8,12 @@ const input=z.object({name:z.string().trim().min(1).max(200),due_date:z.string()
 
 milestoneRoutes.get('/projects/:projectId/milestones',handler(async(req,res)=>{
   const user=currentUser(res),projectId=uid(req.params.projectId);await projectMember(user,projectId);
-  res.json(await query(db,`SELECT m.id,m.project_id,m.name,m.due_date,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done
-    FROM milestones m LEFT JOIN tasks t ON t.milestone_id=m.id
-    WHERE m.project_id=$1 GROUP BY m.id ORDER BY m.due_date,m.id`,[projectId]));
+  res.json(await query(db,`SELECT m.id,m.project_id,m.name,m.due_date,count(t.id) FILTER (WHERE $3='PM' OR t.owner_id=$2 OR linked_sp.owner_id=$2)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE' AND ($3='PM' OR t.owner_id=$2 OR linked_sp.owner_id=$2))::int AS task_done
+    FROM milestones m LEFT JOIN tasks t ON t.milestone_id=m.id LEFT JOIN sub_projects linked_sp ON linked_sp.id=t.sub_project_id
+    WHERE m.project_id=$1 AND ($3='PM' OR EXISTS(
+      SELECT 1 FROM tasks own LEFT JOIN sub_projects sp ON sp.id=own.sub_project_id
+      WHERE own.milestone_id=m.id AND (own.owner_id=$2 OR sp.owner_id=$2)))
+    GROUP BY m.id ORDER BY m.due_date,m.id`,[projectId,user.id,user.role]));
 }));
 milestoneRoutes.post('/projects/:projectId/milestones',handler(async(req,res)=>{
   const user=currentUser(res),projectId=uid(req.params.projectId);await projectManager(user,projectId);const data=input.parse(req.body);

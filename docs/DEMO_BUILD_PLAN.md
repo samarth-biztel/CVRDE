@@ -2,6 +2,8 @@
 
 This revision records the decisions in [Issue #18](https://github.com/biztel-engg/ProjMgmtSoftware/issues/18). The fictional Engine Development Programme has three sub-projects. The live loop is: PM overview, sub-project owner assignment, task owner evidence and submission, return with reason, correction and resubmission, sub-project owner sign-off, PM meeting and action item, then action item in its owner's My work and bell.
 
+> **Role-scope update, 1 Nov 2026:** PMs can see all projects. Sub-project owners can see all tasks in their own sub-projects. Task owners see only their assigned projects and own tasks in the main view; a separate limited sub-project task view is available for raising dependencies. This supersedes the broad same-sub-project commenting and hidden-dependency assumptions below. See [current project behavior](PROJECT.md).
+
 ## Roles and permissions
 
 The PM alone creates or edits a sub-project's name, Objective, due date, and owner. The Objective field explains “What this sub-project must deliver.” A sub-project owner creates, edits, and assigns its tasks, reviews submissions, and runs its meetings. Anyone who can view a task can comment, including another task owner in that sub-project. The API enforces these rules.

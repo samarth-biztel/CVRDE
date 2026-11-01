@@ -50,10 +50,22 @@ export function UserHome({projectId,onTask,onSubmissions,onReview,run}:{projectI
   </div>;
 }
 export function UserTasks({user,projectId,onTask,run}:{user:User;projectId:number|null;onTask:(id:number)=>void;run:Run}){
-  const [tab,setTab]=useState<'mine'|'shared'>('mine');
+  const [tab,setTab]=useState<'mine'|'subproject'>('mine'),[dependencyTarget,setDependencyTarget]=useState<number|null>(null);
   const tasks=useQuery({queryKey:['tasks',projectId],queryFn:()=>api<Task[]>(`/projects/${projectId}/tasks`),enabled:!!projectId});
-  const mine=(tasks.data||[]).filter(t=>t.owner_id===user.id),shared=(tasks.data||[]).filter(t=>t.owner_id!==user.id&&(t.visibility==='GROUP'||!!t.sub_project_id));
-  return <><div className="pm-tabs"><button className={tab==='mine'?'active':''} onClick={()=>setTab('mine')}>My tasks</button><button className={tab==='shared'?'active':''} onClick={()=>setTab('shared')}>Shared with me</button></div><section className={'card'+(tab==='shared'?' shared-task-table':'')}><h2>{tab==='mine'?'My tasks':'Shared with me'}</h2>{tab==='shared'&&<p className="muted">Shared tasks are available to view and comment on. The owner handles status and submission.</p>}<WorkspaceTaskTable tasks={tab==='mine'?mine:shared} onTask={onTask} renderActions={tab==='mine'?task=><WorkTaskAction task={task} run={run}/>:undefined}/></section></>;
+  const subProjects=useQuery({queryKey:['sub-projects',projectId],queryFn:()=>api<{id:number;name:string;owner_id:number}[]>(`/projects/${projectId}/sub-projects`),enabled:!!projectId});
+  const dependencyTasks=useQuery({queryKey:['dependency-tasks',projectId],queryFn:()=>api<Task[]>(`/projects/${projectId}/tasks?scope=dependencies`),enabled:!!projectId&&tab==='subproject'});
+  const mine=(tasks.data||[]).filter(t=>t.owner_id===user.id),ownedIds=new Set((subProjects.data||[]).filter(item=>item.owner_id===user.id).map(item=>item.id));
+  const managed=(tasks.data||[]).filter(t=>t.owner_id!==user.id&&!!t.sub_project_id&&ownedIds.has(t.sub_project_id));
+  const peers=(dependencyTasks.data||[]).filter(t=>!!t.sub_project_id&&!ownedIds.has(t.sub_project_id));
+  return <><div className="pm-tabs"><button className={tab==='mine'?'active':''} onClick={()=>setTab('mine')}>My tasks</button><button className={tab==='subproject'?'active':''} onClick={()=>setTab('subproject')}>Sub-project tasks</button></div>
+    {tab==='mine'?<section className="card"><h2>My tasks</h2><WorkspaceTaskTable tasks={mine} onTask={onTask} renderActions={task=><WorkTaskAction task={task} run={run}/>}/></section>:
+      <div className="subproject-task-view">
+        {managed.length>0&&<section className="card"><h2>Tasks I manage</h2><p className="muted">You can review and manage tasks in your sub-project.</p><WorkspaceTaskTable tasks={managed} onTask={onTask}/></section>}
+        <section className="card"><h2>Related tasks for dependencies</h2><p className="muted">These are tasks in your sub-project. Use them only to raise a dependency on one of your own tasks.</p>
+          {peers.length?peers.map(peer=>{const related=mine.filter(task=>task.sub_project_id===peer.sub_project_id);return <div className="dependency-peer" key={peer.id}><div><strong>{peer.title}</strong><small>{peer.sub_project_name} · {peer.owner_name} · {statusLabel(peer.status)} · <span className={dueClass(peer.due_date)}>{dueLabel(peer.due_date)}</span></small></div><button onClick={()=>setDependencyTarget(dependencyTarget===peer.id?null:peer.id)}>Raise dependency</button>{dependencyTarget===peer.id&&<form className="inline-form dependency-form" onSubmit={event=>{event.preventDefault();const form=event.currentTarget,data=new FormData(form);run(async()=>{await post('/pendencies',{blocked_task_id:Number(data.get('blocked_task_id')),depends_on_task_ids:[peer.id],responsible_user_id:peer.owner_id,type:'ACTION',description:String(data.get('description')||'').trim(),needs_approval:true});setDependencyTarget(null)},'Dependency raised')}}><label>My task<select name="blocked_task_id" required><option value="">Choose your task</option>{related.map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select></label><label>What is needed?<input name="description" maxLength={2000} required/></label><button className="primary">Send request</button></form>}</div>}):<p className="muted">{dependencyTasks.isLoading?'Loading related tasks…':'No other tasks in your sub-project are available for dependencies.'}</p>}
+        </section>
+      </div>}
+  </>;
 }
 export function MySubmissions({onTask}:{onTask:(taskId:number,projectId:number)=>void}){
   const submissions=useQuery({queryKey:['my-submissions'],queryFn:()=>api<Submission[]>('/me/submissions')});

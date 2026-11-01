@@ -26,12 +26,12 @@ try{
   await second.getByText('Please revise the channel map').first().waitFor();
   await second.getByText('Revise assumptions').waitFor();
   await second.getByTestId('nav-tasks').click();
-  await second.getByRole('button',{name:'Shared with me'}).click();
-  await second.locator('.shared-task-table').waitFor();
+  await second.getByRole('button',{name:'Sub-project tasks'}).click();
+  await second.getByRole('heading',{name:'Related tasks for dependencies'}).waitFor();
   assert.equal(await second.getByRole('button',{name:'Start',exact:true}).count(),0);
   assert.equal(await second.getByRole('button',{name:'Submit for review'}).count(),0);
   await second.getByTestId('nav-projects').click();
-  await second.getByRole('heading',{name:'Team',exact:true}).waitFor();
+  await second.locator('.user-projects').waitFor();
   assert.equal(await second.getByRole('button',{name:'Edit project'}).count(),0);
   await second.goto(`${origin}/review`);
   await second.getByRole('heading',{name:'My work'}).waitFor();
@@ -59,5 +59,5 @@ try{
   await first.getByTestId('nav-submissions').click();
   await first.getByText('Sample tests completed for review').waitFor();
   await first.getByText('Pending',{exact:true}).first().waitFor();
-  console.log('User UI check passed: landing, returned reason, owner-only lists, inline actions, shared view, submissions, read-only project, and Review URL.');
+  console.log('User UI check passed: landing, returned reason, owner-only lists, inline actions, dependency view, submissions, scoped project, and Review URL.');
 }finally{await Promise.all([api.dispose(),ownerApi.dispose()]);await browser.close()}

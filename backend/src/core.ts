@@ -36,8 +36,12 @@ export async function getProject(projectId: number) {
 }
 export async function projectMember(user: User, projectId: number) {
   const p = await getProject(projectId);
-  if (p.manager_id === user.id) return p;
-  const member = await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[projectId,user.id]);
+  if (user.role === 'PM' || p.manager_id === user.id) return p;
+  const member = user.role === 'MEMBER'
+    ? await one(db,`SELECT 1 WHERE
+        EXISTS(SELECT 1 FROM sub_projects WHERE project_id=$1 AND owner_id=$2)
+        OR EXISTS(SELECT 1 FROM tasks WHERE project_id=$1 AND owner_id=$2)`,[projectId,user.id])
+    : await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[projectId,user.id]);
   if (!member) throw new HttpError(404,'Project not found');
   return p;
 }
@@ -54,9 +58,10 @@ export async function taskById(id: number): Promise<Task> {
 export type Action = 'VIEW' | 'EDIT' | 'RESULTS' | 'COMMENT' | 'LINK';
 export async function taskAccess(user: User, task: Task, action: Action): Promise<'FULL' | 'LIMITED'> {
   if (user.id === task.manager_id || user.id === task.owner_id || user.id === task.sub_project_owner_id || task.sub_project_id && user.id===task.created_by) return 'FULL';
-  if (task.sub_project_id && (action === 'VIEW' || action === 'COMMENT')) {
+  if (user.role === 'PM' && ['VIEW','RESULTS','COMMENT'].includes(action)) return 'FULL';
+  if (task.sub_project_id && (action === 'VIEW' || action === 'LINK')) {
     const teammate = await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[task.sub_project_id,user.id]);
-    if (teammate) return 'FULL';
+    if (teammate) return action === 'VIEW' ? 'LIMITED' : 'FULL';
   }
   if (task.visibility === 'GROUP' && task.group_id) {
     const permission = await one<{ can_view_results:boolean; can_comment:boolean; can_link_pendency:boolean }>(db,
@@ -80,7 +85,7 @@ export async function taskAccess(user: User, task: Task, action: Action): Promis
   throw new HttpError(404,'Task not found');
 }
 export async function visibleTaskIds(user: User, projectId: number): Promise<number[]> {
-  const records = await query<{ id:number }>(db,`SELECT t.id FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND (p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR (t.sub_project_id IS NOT NULL AND EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)) OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.id`,[projectId,user.id]);
+  const records = await query<{ id:number }>(db,`SELECT t.id FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND ($3='PM' OR p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR (t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.id`,[projectId,user.id,user.role]);
   return records.map(x=>Number(x.id));
 }
 export async function history(executor: Executor, projectId:number, taskId:number|null, eventType:string, actorId:number, details:unknown) {

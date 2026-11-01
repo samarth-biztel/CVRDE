@@ -18,13 +18,13 @@ CVRDE Work Management is a fictional, cloud-hosted demo of an engine development
 
 | Role | Main responsibilities |
 |---|---|
-| PM | Create and edit projects and sub-project details; see risk, workload, progress, reports and settings; manage members; review work in their scope |
+| PM | See all projects; create and edit projects they own and their sub-project details; see risk, workload, progress, reports and settings; manage members; review work in their scope |
 | Sub-project owner | Create, edit and assign tasks in their sub-project; review submissions; run its meetings; cannot edit sub-project details |
-| Task owner | See My work, start tasks, update progress with a reason, upload evidence, submit or resubmit results, and comment |
+| Task owner | See assigned projects and mainly their own tasks; start work, update progress with a reason, upload evidence, submit or resubmit results, comment on their own tasks, and raise dependencies from a separate limited peer-task view |
 | Shared viewer | View and comment on accessible tasks; cannot change status, upload, or submit another person's work |
 | Admin | Account oversight and deactivation |
 
-The API enforces permissions independently of the UI. Same-sub-project task owners can comment on work they can view. Review is shown only to people with review rights.
+The API enforces permissions independently of the UI. Sub-project owners can view and manage all tasks in their sub-project. Task owners see only their own tasks in the main list; the separate sub-project view exposes peer task title, owner, status and due date solely for dependencies. Peer task contents and comments are not available through that view. Review is shown only to people with review rights.
 
 ## 🗂️ Screens and workflows
 
@@ -32,8 +32,8 @@ The API enforces permissions independently of the UI. Same-sub-project task owne
 |---|---|
 | PM Overview | Waiting decisions, overdue and due-soon work, stale or flagged risks, workload, sub-project progress, recent activity |
 | My work | Returned work and reasons, open tasks grouped by due date, submitted work awaiting review, activity |
-| Projects | Project details, sub-projects, milestones, meetings, team, documents, and read-only project information for users |
-| Tasks | Search, sort, filters, tabs, quick-add and inline actions for authorized users |
+| Projects | PMs see all projects. Task owners see only projects where they own work, with project context and documents; sub-project owners see and manage only their sub-projects |
+| Tasks | Search, sort, filters, tabs, quick-add and inline actions for authorized users; task owners get My tasks and a separate dependency-only sub-project view |
 | Task detail | Description, deliverables, subtasks, justified progress, activity, files, submission and review outcome |
 | Review | Submission decisions with reasons; requests are available outside demo mode |
 | My submissions | Submitted work and request outcomes with reviewer comments |
@@ -50,6 +50,6 @@ The bell records task assignments, submissions, returns, acceptances, comments, 
 
 ## 🧪 Demo scope and boundaries
 
-The default demo build hides groups, reassignment and extension requests, prerequisites, and the “Linked to” task control. Their schema and APIs remain, and `VITE_DEMO_MODE=false` restores the controls at build time. This follows the approved [demo plan](DEMO_BUILD_PLAN.md). Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
+The default demo build hides groups, reassignment and extension requests, full prerequisite editing on task detail, and the “Linked to” task control. Task owners can still raise dependencies from the separate sub-project task view and see existing prerequisites on their tasks. The schema and APIs remain, and `VITE_DEMO_MODE=false` restores the broader controls at build time. This updates the earlier [demo plan](DEMO_BUILD_PLAN.md). Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
 
 For the scripted sequence, start with the [demo guide](DEMO_GUIDE.md).

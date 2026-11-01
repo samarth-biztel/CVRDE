@@ -23,7 +23,7 @@ A fictional engine development programme showing how a PM structures work, assig
 
 On the sign-in screen, choose a demo person; the form fills their credentials. Read the [setup guide](docs/SETUP.md) before using an existing or hosted database: resetting replaces the named fictional demo projects.
 
-> **Demo UI:** `VITE_DEMO_MODE` defaults to on. Set `VITE_DEMO_MODE=false` **before building the frontend** to show groups, linked tasks, prerequisites, and reassignment and due-date requests. See [configuration](docs/CONFIGURATION.md#demo-mode).
+> **Demo UI:** Task owners can raise dependencies from a limited sub-project task view. `VITE_DEMO_MODE` defaults to on; set it to `false` **before building the frontend** to show groups, linked-task editing, the full prerequisite controls, and reassignment and due-date requests. See [configuration](docs/CONFIGURATION.md#demo-mode).
 
 ## 🧭 At a glance
 
