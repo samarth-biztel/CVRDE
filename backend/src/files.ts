@@ -39,17 +39,19 @@ function validateFile(data:Buffer,name:string){
     if(data.includes(0))throw new HttpError(400,'Text file contains binary data');
   }
 }
-const input=z.object({document_key:z.string().trim().min(1).max(100)}).strict();
+const input=z.object({document_key:z.string().trim().min(1).max(100).optional()}).strict();
 fileRoutes.post('/tasks/:taskId/attachments',upload.single('file'),handler(async(req,res)=>{
   const file=req.file;if(!file)throw new HttpError(400,'Allowed file required');
   const user=currentUser(res),task=await taskById(uid(req.params.taskId));if(user.id!==task.owner_id)throw new HttpError(403,'Owner only');
+  if(!['NOT_STARTED','IN_PROGRESS','RETURNED'].includes(task.status))throw new HttpError(409,'Files can be added before submission only');
   const data=input.parse(req.body);validateFile(file.buffer,file.originalname);
+  const documentKey=data.document_key||basename(file.originalname,extname(file.originalname)).slice(0,100);
   const row=await db.transaction().execute(async tx=>{
-    const item=await one<Attachment>(tx,`INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,NULL,$3,(SELECT coalesce(max(version_no),0)+1 FROM attachments WHERE project_id=$1 AND document_key=$3),$4,$5,$6,$7,$8,$9) RETURNING id,project_id,task_id,document_key,version_no,original_name,mime_type,size_bytes`,[task.project_id,task.id,`task:${task.id}:${data.document_key}`,basename(file.originalname),randomUUID(),mime[extname(file.originalname).toLowerCase()],file.size,user.id,file.buffer]);
+    const item=await one<Attachment>(tx,`INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,NULL,$3,(SELECT coalesce(max(version_no),0)+1 FROM attachments WHERE project_id=$1 AND document_key=$3),$4,$5,$6,$7,$8,$9) RETURNING id,project_id,task_id,document_key,version_no,original_name,mime_type,size_bytes`,[task.project_id,task.id,`task:${task.id}:${documentKey}`,basename(file.originalname),randomUUID(),mime[extname(file.originalname).toLowerCase()],file.size,user.id,file.buffer]);
     await history(tx,task.project_id,task.id,'ATTACHMENT_UPLOADED',user.id,{attachment_id:item!.id,version_no:item!.version_no});return item;
   });res.status(201).json(row);
 }));
-fileRoutes.get('/tasks/:taskId/attachments',handler(async(req,res)=>{const user=currentUser(res),task=await taskById(uid(req.params.taskId));await taskAccess(user,task,'RESULTS');res.json(await query(db,'SELECT id,project_id,task_id,result_id,document_key,version_no,original_name,mime_type,size_bytes,uploaded_at FROM attachments WHERE task_id=$1 ORDER BY document_key,version_no DESC',[task.id]));}));
+fileRoutes.get('/tasks/:taskId/attachments',handler(async(req,res)=>{const user=currentUser(res),task=await taskById(uid(req.params.taskId));await taskAccess(user,task,'RESULTS');res.json(await query(db,'SELECT a.id,a.project_id,a.task_id,a.result_id,a.original_name,a.mime_type,a.size_bytes,a.uploaded_at,u.full_name AS uploaded_by_name FROM attachments a JOIN users u ON u.id=a.uploaded_by WHERE a.task_id=$1 ORDER BY a.uploaded_at,a.id',[task.id]));}));
 fileRoutes.post('/projects/:projectId/documents',upload.single('file'),handler(async(req,res)=>{
   const file=req.file;if(!file)throw new HttpError(400,'Allowed file required');
   const user=currentUser(res),projectId=uid(req.params.projectId);await projectManager(user,projectId);validateFile(file.buffer,file.originalname);
@@ -62,7 +64,7 @@ fileRoutes.get('/attachments/:attachmentId/versions',handler(async(req,res)=>{co
 fileRoutes.delete('/attachments/:attachmentId',handler(async(req,res)=>{
   const user=currentUser(res),item=await attachmentFor(user,uid(req.params.attachmentId));
   if(item.result_id)throw new HttpError(409,'Submitted files cannot be removed');
-  if(item.task_id){const task=await taskById(item.task_id);if(user.id!==task.owner_id&&user.id!==task.manager_id)throw new HttpError(403,'Owner or manager only');}
+  if(item.task_id){const task=await taskById(item.task_id);if(user.id!==task.owner_id)throw new HttpError(403,'Owner only');if(!['NOT_STARTED','IN_PROGRESS','RETURNED'].includes(task.status))throw new HttpError(409,'Files can be removed before submission only');}
   else await projectManager(user,item.project_id);
   await db.transaction().execute(async tx=>{await history(tx,item.project_id,item.task_id,'ATTACHMENT_DELETED',user.id,{attachment_id:item.id,name:item.original_name});await query(tx,'DELETE FROM attachments WHERE id=$1',[item.id]);});
   res.json({ok:true});

@@ -18,7 +18,7 @@ const taskInput = z.object({title:z.string().trim().min(1).max(200),description:
 type SubProject={id:number;project_id:number;name:string;objective:string;owner_id:number;due_date:string};
 const subProjectInput=z.object({name:z.string().trim().min(1).max(200),objective:z.string().trim().max(10000),owner_id:z.number().int().positive(),due_date:z.string().date()});
 async function subProjectById(subProjectId:number){const item=await one<SubProject>(db,'SELECT id,project_id,name,objective,owner_id,due_date FROM sub_projects WHERE id=$1',[subProjectId]);if(!item)throw new HttpError(404,'Sub-project not found');return item;}
-async function canEditTask(user:User,task:Task){if(user.role==='PM'&&user.id===task.manager_id)return;if(task.sub_project_id&&user.id===task.sub_project_owner_id)return;throw new HttpError(task.sub_project_id?403:404,'Only the PM or sub-project owner can edit this task');}
+async function canEditTask(user:User,task:Task){if(!(user.role==='PM'&&user.id===task.manager_id)&&!(task.sub_project_id&&user.id===task.sub_project_owner_id))throw new HttpError(task.sub_project_id?403:404,'Only the PM or sub-project owner can edit this task');if(task.status==='SUBMITTED'||task.status==='DONE')throw new HttpError(409,'Submitted and done tasks cannot be edited');}
 function canReviewTask(user:User,task:Task){return user.role==='PM'&&user.id===task.manager_id||!!task.sub_project_id&&task.project_name==='Engine Development Programme'&&user.id===task.sub_project_owner_id;}
 async function checkProjectDeadline(projectId:number,dueDate:string|null|undefined){
   if(!dueDate)return;
@@ -218,12 +218,13 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const d=parse(taskInput,req.body);
   let subProject:SubProject|undefined;
   if(d.sub_project_id){subProject=await subProjectById(d.sub_project_id);if(subProject.project_id!==pid)throw new HttpError(400,'Sub-project must belong to project');}
-  if(u.role!=='PM'||(await getProject(pid)).manager_id!==u.id){if(!subProject||subProject.owner_id!==u.id)throw new HttpError(403,'Only the PM or sub-project owner can create this task');}
+  let parent:Task|undefined;
+  if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid||parent.sub_project_id!==(subProject?.id||null))throw new HttpError(400,'Parent must belong to the same sub-project');}
+  const ownSubtask=!!parent&&parent.owner_id===u.id&&d.owner_id===u.id&&!parent.parent_task_id&&['NOT_STARTED','IN_PROGRESS','RETURNED'].includes(parent.status);
+  if(u.role!=='PM'||(await getProject(pid)).manager_id!==u.id){if(!ownSubtask&&(!subProject||subProject.owner_id!==u.id))throw new HttpError(403,'Only the PM, sub-project owner, or current task owner can create this task');}
   await checkProjectDeadline(pid,d.due_date);
   await checkSubProjectDeadline(subProject?.id,d.due_date);
   const member=d.owner_id===u.id||await one(db,'SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,d.owner_id]);if(!member)throw new HttpError(400,'Owner must belong to project');
-  let parent:Task|undefined;
-  if(d.parent_task_id){parent=await taskById(d.parent_task_id);if(parent.project_id!==pid||parent.sub_project_id!==(subProject?.id||null))throw new HttpError(400,'Parent must belong to the same sub-project');}
   const task=await db.transaction().execute(async tx=>{
     const row=await one<Task>(tx,`INSERT INTO tasks(project_id,sub_project_id,parent_task_id,title,description,expected_deliverables,owner_id,priority,due_date,status,visibility,group_id,plm_ref,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'NOT_STARTED',$10,$11,$12,$13) RETURNING *`,[pid,subProject?.id||null,d.parent_task_id || null,d.title,d.description,d.expected_deliverables,d.owner_id,d.priority,d.due_date || null,parent?.visibility || 'PRIVATE',parent?.group_id || null,d.plm_ref || null,u.id]);
     await history(tx,pid,row!.id,'TASK_CREATED',u.id,{title:d.title,owner_id:d.owner_id});return row!;
@@ -234,13 +235,14 @@ api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
 api.get('/tasks/:taskId',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId)),access=await taskAccess(u,task,'VIEW');
   if(access==='LIMITED')return send(res,{id:task.id,title:task.title,status:task.status,limited:true});
-  const [people,project,subtasks]=await Promise.all([
-    query<{id:number;full_name:string}>(db,'SELECT id,full_name FROM users WHERE id=ANY($1::bigint[])',[[task.owner_id,task.manager_id,task.created_by]]),
+  const [people,project,subtasks,review]=await Promise.all([
+    query<{id:number;full_name:string}>(db,'SELECT id,full_name FROM users WHERE id=ANY($1::bigint[])',[[task.owner_id,task.manager_id,task.created_by,task.sub_project_owner_id].filter(Boolean)]),
     getProject(task.project_id),
-    query<{total:number;done:number}>(db,"SELECT count(*)::int AS total,count(*) FILTER (WHERE status='DONE')::int AS done FROM tasks WHERE parent_task_id=$1",[task.id])
+    query<{total:number;done:number}>(db,"SELECT count(*)::int AS total,count(*) FILTER (WHERE status='DONE')::int AS done FROM tasks WHERE parent_task_id=$1",[task.id]),
+    one<{review_status:string;review_comment:string|null;reviewed_at:string|null;reviewer_name:string|null;submitted_at:string}>(db,'SELECT r.review_status,r.review_comment,r.reviewed_at,u.full_name AS reviewer_name,r.submitted_at FROM task_results r LEFT JOIN users u ON u.id=r.reviewed_by WHERE r.task_id=$1 ORDER BY r.version_no DESC LIMIT 1',[task.id])
   ]);
   const subProject=task.sub_project_id?await subProjectById(task.sub_project_id):null;
-  send(res,{...task,project_name:project.name,sub_project_name:subProject?.name||null,owner_name:people.find(p=>p.id===task.owner_id)?.full_name,assigned_by_name:people.find(p=>p.id===task.created_by)?.full_name,subtask_count:subtasks[0]});
+  send(res,{...task,project_name:project.name,sub_project_name:subProject?.name||null,owner_name:people.find(p=>p.id===task.owner_id)?.full_name,assigned_by_name:people.find(p=>p.id===task.created_by)?.full_name,sub_project_owner_name:people.find(p=>p.id===task.sub_project_owner_id)?.full_name,subtask_count:subtasks[0],reviewer_name:review?.reviewer_name,review_comment:review?.review_comment,completed_at:task.status==='DONE'?review?.reviewed_at:null});
 }));
 api.get('/tasks/:taskId/subtasks',handler(async(req,res)=>{
   const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');
@@ -262,7 +264,7 @@ api.post('/tasks/:taskId/risk',handler(async(req,res)=>{
   const input=parse(z.object({flagged:z.boolean(),reason:z.string().trim().max(1000).optional()}).strict(),req.body);
   if(input.flagged){
     if(user.id!==task.owner_id)throw new HttpError(403,'Only the task owner can flag risk');
-    if(task.status==='DONE')throw new HttpError(409,'Completed tasks cannot be flagged');
+    if(!['NOT_STARTED','IN_PROGRESS','RETURNED'].includes(task.status))throw new HttpError(409,'Only active tasks can be flagged');
     if(!input.reason)throw new HttpError(400,'A short risk reason is required');
   }else if(user.id!==task.owner_id&&!(user.role==='PM'&&user.id===task.manager_id))throw new HttpError(403,'Only the task owner or PM can clear risk');
   if(input.flagged===task.risk_flag)throw new HttpError(409,input.flagged?'Task is already flagged':'Task is not flagged');
@@ -390,7 +392,7 @@ api.post('/tasks/:taskId/results',handler(async(req,res)=>{
     await query(tx,"UPDATE tasks SET status='SUBMITTED',updated_at=now() WHERE id=$1",[task.id]);await history(tx,task.project_id,task.id,'RESULT_SUBMITTED',u.id,{result_id:(r as {id:number}).id,version_no:(r as {version_no:number}).version_no,attachment_ids:d.attachment_ids,old:task.status,new:'SUBMITTED'});return r;
   });await notify('SUBMITTED',task.created_by,task.id,`Result submitted: ${task.title}`,d.outcome,u.id);send(res,row,201);
 }));
-api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,"SELECT r.*,(SELECT coalesce(array_agg(a.original_name ORDER BY a.id),'{}'::text[]) FROM attachments a WHERE a.result_id=r.id) AS attachment_names,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r WHERE r.task_id=$1 ORDER BY r.version_no DESC",[task.id]));}));
+api.get('/tasks/:taskId/results',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));await taskAccess(u,task,'RESULTS');send(res,await query(db,"SELECT r.*,reviewer.full_name AS reviewer_name,submitter.full_name AS submitted_by_name,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at,'size_bytes',a.size_bytes,'uploaded_by_name',(SELECT full_name FROM users WHERE id=a.uploaded_by)) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN users submitter ON submitter.id=r.submitted_by LEFT JOIN users reviewer ON reviewer.id=r.reviewed_by WHERE r.task_id=$1 ORDER BY r.version_no DESC",[task.id]));}));
 api.post('/results/:resultId/review',handler(async(req,res)=>{
   const u=currentUser(res),rid=id(req.params.resultId),d=parse(z.object({accept:z.boolean(),comment:z.string().max(3000).default('')}),req.body);
   const r=await one<{id:number;task_id:number;status:string;review_status:string;submitted_by:number}>(db,'SELECT * FROM task_results WHERE id=$1',[rid]);if(!r)throw new HttpError(404,'Result not found');
@@ -492,7 +494,7 @@ api.get('/me/pending-actions',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['PM','REVIEWER','MEMBER']);
   if(u.role==='MEMBER'){const scope=await one(db,"SELECT 1 FROM sub_projects sp JOIN projects p ON p.id=sp.project_id WHERE sp.owner_id=$1 AND p.name='Engine Development Programme' LIMIT 1",[u.id]);if(!scope)throw new HttpError(403,'Review is available to sub-project owners only');}
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
-    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,sp.name AS sub_project_name,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE (p.manager_id=$1 OR (sp.owner_id=$1 AND p.name='Engine Development Programme')) AND r.review_status='PENDING'`,[u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,sp.name AS sub_project_name,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at,'size_bytes',a.size_bytes,'uploaded_by_name',(SELECT full_name FROM users WHERE id=a.uploaded_by)) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE (p.manager_id=$1 OR (sp.owner_id=$1 AND p.name='Engine Development Programme')) AND r.review_status='PENDING'`,[u.id]),
     query(db,`SELECT e.id,t.id AS task_id,t.project_id,t.title,t.due_date,'EXTENSION' AS kind,e.created_at AS requested_at,e.reason AS summary,u.full_name AS submitted_by,e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=e.requested_by WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
     query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'REASSIGNMENT' AS kind,r.created_at AS requested_at,r.reason AS summary,u.full_name AS submitted_by,r.work_from,r.work_until,nu.full_name AS new_owner_name FROM reassignments r JOIN tasks t ON t.id=r.task_id JOIN users u ON u.id=r.requested_by JOIN users nu ON nu.id=r.new_owner_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_APPROVAL' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),
