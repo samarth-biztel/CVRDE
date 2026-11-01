@@ -6,7 +6,7 @@ const origin=process.env.CVRDE_UI_URL||'http://localhost:5173';
 async function login(username,landing){const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto(origin);await page.getByTestId(`demo-${username.replaceAll('.','-')}`).click();await page.getByTestId('login-submit').click();await page.getByTestId(`nav-${landing}`).waitFor();return page}
 try{
   const pm=await login('pm.demo','overview');
-  assert.equal(await pm.getByTestId('nav-projects').count(),0);assert.equal(await pm.locator('.sidebar-project').count(),0);assert.equal(await pm.getByTestId('nav-reports').count(),0);
+  assert.equal(await pm.getByTestId('nav-projects').count(),0);assert.equal(await pm.locator('.sidebar-project').count(),1);assert.equal(await pm.getByTestId('nav-reports').count(),0);
   await pm.locator('.demo-project-home').waitFor();await pm.locator('.demo-subproject-grid button').first().waitFor();assert.equal(await pm.locator('.demo-subproject-grid button').count(),3);
   for(const text of ['At risk','Open meeting actions','Milestones','Sub-projects'])assert.ok((await pm.locator('.demo-project-home').innerText()).includes(text));
   await pm.locator('.demo-home-grid').getByRole('button',{name:/Share CFD assumptions/}).click();await pm.locator('.meeting-source').waitFor();await pm.locator('.meeting-source').click();await pm.getByRole('heading',{name:'Minutes'}).waitFor();

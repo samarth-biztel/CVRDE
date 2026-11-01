@@ -7,7 +7,7 @@ export const milestoneRoutes=Router();
 const input=z.object({name:z.string().trim().min(1).max(200),due_date:z.string().date()});
 
 milestoneRoutes.get('/projects/:projectId/milestones',handler(async(req,res)=>{
-  const user=currentUser(res),projectId=uid(req.params.projectId);await projectManager(user,projectId);
+  const user=currentUser(res),projectId=uid(req.params.projectId);if(user.role!=='PM')throw new HttpError(404,'Not found');await projectMember(user,projectId);
   res.json(await query(db,`SELECT m.id,m.project_id,m.name,m.due_date,count(t.id) FILTER (WHERE $3='PM' OR t.owner_id=$2 OR linked_sp.owner_id=$2)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE' AND ($3='PM' OR t.owner_id=$2 OR linked_sp.owner_id=$2))::int AS task_done
     FROM milestones m LEFT JOIN tasks t ON t.milestone_id=m.id LEFT JOIN sub_projects linked_sp ON linked_sp.id=t.sub_project_id
     WHERE m.project_id=$1 AND ($3='PM' OR EXISTS(

@@ -10,7 +10,7 @@ The PM alone creates or edits a sub-project's name, Objective, due date, and own
 
 ## Demo presentation
 
-The single project switcher is optional for the demo. The real organisation name appears once in the sidebar. Task history uses readable sentences, and due dates use a common date format with relative labels. The demo interface hides groups, reassignment and extension requests, prerequisites, and “Linked to”; their schema and APIs stay intact. `VITE_DEMO_MODE=false` at frontend build time restores these controls.
+PMs use a single project switcher in the sidebar; other PMs' projects are read-only. The real organisation name appears once in the sidebar. Task history uses readable sentences, and due dates use a common date format with relative labels. The demo interface hides groups, reassignment and extension requests, and “Linked to”; their schema and APIs stay intact. Task owners raise dependencies from the task detail page. `VITE_DEMO_MODE=false` at frontend build time restores deferred controls.
 
 The at-risk panel includes overdue open tasks, tasks due within three days that have not started, tasks with no update beyond the configured threshold, and explicit risk flags. The stale rule excludes Done and Submitted. An overdue Submitted task reads “Overdue, awaiting review.” The reset seed supplies Crankshaft stress analysis (overdue), Friction loss estimation (due in two days and not started), and Cooling jacket design (stale). My work groups Due this week as today through six days ahead, then Later.
 

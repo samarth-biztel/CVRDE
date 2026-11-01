@@ -29,15 +29,22 @@ export function SubProjectHome({user,projectId,subProjectId,onTask,onMeeting,onR
     <section className="card"><MeetingsPanel projectId={projectId} subProjectId={subProjectId} user={user} members={members.data||[]} onMeeting={onMeeting} run={run} canCreate/></section>
   </div>;
 }
-export function RoleMeetings({user,projectId,subProjectId,isSubOwner,onMeeting,run}:{user:User;projectId:number;subProjectId:number|null;isSubOwner:boolean;onMeeting:(id:number)=>void;run:Run}){
+export function RoleMeetings({user,projectId,subProjectId,isSubOwner,canManageProject,onMeeting,run}:{user:User;projectId:number;subProjectId:number|null;isSubOwner:boolean;canManageProject:boolean;onMeeting:(id:number)=>void;run:Run}){
   const members=useQuery({queryKey:['meeting-assignees',projectId,subProjectId],queryFn:()=>api<User[]>(user.role==='PM'?`/projects/${projectId}/members`:`/sub-projects/${subProjectId}/assignees`),enabled:user.role==='PM'||isSubOwner});
-  return <section className="card"><MeetingsPanel projectId={projectId} subProjectId={user.role==='PM'?null:subProjectId} user={user} members={members.data||[]} onMeeting={onMeeting} run={run} canCreate={user.role==='PM'||isSubOwner}/></section>;
+  return <section className="card"><MeetingsPanel projectId={projectId} subProjectId={user.role==='PM'?null:subProjectId} user={user} members={members.data||[]} onMeeting={onMeeting} run={run} canCreate={user.role==='PM'?canManageProject:isSubOwner}/></section>;
 }
-export function ProjectDetails({projectId,onBack}:{projectId:number;onBack:()=>void}){
+export function ProjectDetails({projectId,onBack,onTasks}:{projectId:number;onBack:()=>void;onTasks:()=>void}){
   const project=useQuery({queryKey:['project',projectId],queryFn:()=>api<Project>(`/projects/${projectId}`)});
+  const projects=useQuery({queryKey:['projects'],queryFn:()=>api<Project[]>('/projects')});
   const members=useQuery({queryKey:['members',projectId],queryFn:()=>api<User[]>(`/projects/${projectId}/members`)});
+  const subProjects=useQuery({queryKey:['sub-projects',projectId],queryFn:()=>api<SubProject[]>(`/projects/${projectId}/sub-projects`)});
   const docs=useQuery({queryKey:['docs',projectId],queryFn:()=>api<(Attachment&{uploaded_by_name?:string})[]>(`/projects/${projectId}/documents`)});
-  return <section className="card"><button onClick={onBack}>Overview</button><h2>{project.data?.name}</h2><p>{project.data?.description}</p><p className={dueClass(project.data?.target_date)}>Due {dueLabel(project.data?.target_date)}</p><h3>Team</h3>{members.data?.map(member=><p key={member.id}>{member.full_name} · {member.role==='PM'?'Project manager':'Member'}</p>)}<h3>Documents</h3>{docs.data?.length?docs.data.map(doc=><FileRow key={doc.id} file={{...doc,name:doc.original_name}}/>):<p className="muted">No documents uploaded.</p>}</section>;
+  const summary=projects.data?.find(item=>item.id===projectId),done=summary?.task_done||0,total=summary?.task_total||0;
+  return <div className="project-overview-page"><div className="project-overview-toolbar"><button className="text-button" onClick={onBack}>← Back to overview</button><button onClick={onTasks}>View tasks</button></div>
+    <section className="card project-overview-hero"><span className="eyebrow">PROJECT OVERVIEW</span><h2>{project.data?.name||'Project'}</h2><p className="project-overview-description">{project.data?.description||'No description has been added yet.'}</p><div className="project-overview-facts"><div><span>Project manager</span><strong>{summary?.manager_name||'—'}</strong></div><div><span>Due date</span><strong className={dueClass(project.data?.target_date)}>{dueLabel(project.data?.target_date)}</strong></div><div><span>Progress</span><strong>{done} of {total} tasks done</strong></div></div><progress value={done} max={Math.max(total,1)}/></section>
+    <div className="project-overview-lower"><section className="card"><div className="project-overview-section-head"><h3>Team</h3><span>{members.data?.length||0} members</span></div>{members.data?.length?members.data.map(member=>{const owns=subProjects.data?.filter(item=>item.owner_id===member.id)||[];return <div className="project-team-row" key={member.id}><span className="avatar-initials">{member.full_name.split(' ').map(part=>part[0]).slice(0,2).join('')}</span><div><strong>{member.full_name}</strong><small>{owns.length?`Sub-project owner · ${owns.map(item=>item.name).join(', ')}`:'Team member'}</small></div></div>}):<p className="muted">No team members have been added yet.</p>}</section>
+    <section className="card"><div className="project-overview-section-head"><h3>Documents</h3><span>{docs.data?.length||0} files</span></div>{docs.data?.length?<div className="standard-file-list">{docs.data.map(doc=><FileRow key={doc.id} file={{...doc,name:doc.original_name}}/>)}</div>:<p className="muted">No project documents have been uploaded yet.</p>}</section></div>
+  </div>;
 }
 export function SubProjectTasks({subProjectId,onTask}:{subProjectId:number;onTask:(id:number)=>void}){
   const tasks=useQuery({queryKey:['sub-project-tasks',subProjectId],queryFn:()=>api<Task[]>(`/sub-projects/${subProjectId}/tasks`)});

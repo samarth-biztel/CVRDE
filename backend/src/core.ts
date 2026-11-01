@@ -52,8 +52,8 @@ export async function projectManager(user: User, projectId: number) {
   return p;
 }
 export async function demoScope(user: User, projectId: number, resource: 'project'|'subproject'|'task'|'meeting'|'team', subProjectId?: number|null): Promise<void> {
-  const project=await getProject(projectId);
-  if(user.role==='PM' && project.manager_id===user.id)return;
+  await getProject(projectId);
+  if(user.role==='PM')return;
   if(user.role!=='MEMBER')throw new HttpError(404,'Not found');
   if(resource==='project'||resource==='team')throw new HttpError(404,'Not found');
   const ownsSubProject=!!subProjectId&&!!await one(db,'SELECT 1 FROM sub_projects WHERE id=$1 AND project_id=$2 AND owner_id=$3',[subProjectId,projectId,user.id]);

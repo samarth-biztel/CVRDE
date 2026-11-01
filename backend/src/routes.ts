@@ -175,7 +175,7 @@ api.post('/projects/:projectId/members',handler(async(req,res)=>{
   await db.transaction().execute(async tx=>{await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);await history(tx,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});});send(res,{ok:true},201);
 }));
 api.get('/projects/:projectId/members',handler(async(req,res)=>{
-  const u=currentUser(res),pid=id(req.params.projectId),project=await projectManager(u,pid);
+  const u=currentUser(res),pid=id(req.params.projectId),project=u.role==='PM'?await projectMember(u,pid):await projectManager(u,pid);
   if(u.role==='MEMBER'&&!await one(db,'SELECT 1 FROM sub_projects WHERE project_id=$1 AND owner_id=$2 LIMIT 1',[pid,u.id])){
     return send(res,await query(db,`SELECT DISTINCT person.id,person.full_name,person.username,person.role FROM users person
       WHERE person.id=$3 OR person.id=$2
