@@ -91,7 +91,7 @@ api.get('/projects',handler(async(_req,res)=>{
     (SELECT count(*)::int FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND t.status='DONE' AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1)) AS task_done,
     EXISTS(SELECT 1 FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1) AND t.status<>'DONE' AND (t.risk_flag OR t.due_date<current_date OR (t.status='NOT_STARTED' AND t.due_date<=current_date+3) OR (t.status<>'SUBMITTED' AND greatest(t.updated_at,coalesce((SELECT max(h.created_at) FROM task_history h WHERE h.task_id=t.id),t.updated_at))<=now()-(p.stale_after_days * interval '1 day')))) AS at_risk
     FROM projects p JOIN users manager ON manager.id=p.manager_id
-    WHERE $2='PM' OR p.manager_id=$1
+    WHERE p.manager_id=$1
       OR ($2='MEMBER' AND (
         EXISTS(SELECT 1 FROM sub_projects sp WHERE sp.project_id=p.id AND sp.owner_id=$1)
         OR EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.owner_id=$1)))
@@ -316,7 +316,7 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
 api.get('/me/notifications',handler(async(_req,res)=>{
-  const u=currentUser(res);send(res,await query(db,"SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id JOIN projects p ON p.id=t.project_id WHERE n.to_user_id=$1 AND ($2='PM' OR p.name='Engine Development Programme') ORDER BY n.sent_at DESC,n.id DESC LIMIT 100",[u.id,u.role]));
+  const u=currentUser(res);send(res,await query(db,"SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id JOIN projects p ON p.id=t.project_id WHERE n.to_user_id=$1 AND (($2='PM' AND p.manager_id=$1) OR ($2<>'PM' AND p.name='Engine Development Programme')) ORDER BY n.sent_at DESC,n.id DESC LIMIT 100",[u.id,u.role]));
 }));
 api.post('/me/notifications/read-all',handler(async(_req,res)=>{
   const u=currentUser(res);await db.transaction().execute(async tx=>{const rows=await query(tx,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL RETURNING id',[u.id]);if(rows.length)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATIONS_READ',u.id,JSON.stringify({count:rows.length})]);});send(res,{ok:true});

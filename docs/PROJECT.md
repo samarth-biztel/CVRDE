@@ -18,7 +18,7 @@ CVRDE Work Management is a fictional, cloud-hosted demo of an engine development
 
 | Role | Main responsibilities |
 |---|---|
-| PM | See all projects; create and edit projects they own and their sub-project details; see risk, workload, progress, reports and settings; manage members; review work in their scope |
+| PM | See and manage projects they own and their sub-project details; see risk, workload, progress, reports and settings; manage members; review work in their scope |
 | Sub-project owner | Create, edit and assign tasks in their sub-project; review submissions; run its meetings; cannot edit sub-project details |
 | Task owner | See assigned projects and mainly their own tasks; start work, update progress with a reason, upload evidence, submit or resubmit results, comment on their own tasks, and raise dependencies from a separate limited peer-task view |
 | Shared viewer | View and comment on accessible tasks; cannot change status, upload, or submit another person's work |
@@ -32,7 +32,7 @@ The API enforces permissions independently of the UI. Sub-project owners can vie
 |---|---|
 | PM Overview | Waiting decisions, overdue and due-soon work, stale or flagged risks, workload, sub-project progress, recent activity |
 | My work | Returned work and reasons, open tasks grouped by due date, submitted work awaiting review, activity |
-| Projects | PMs can switch between all projects; projects managed by another PM are read-only. Task owners see only projects where they own work, with project context and documents; sub-project owners see and manage only their sub-projects |
+| Projects | PMs can switch between projects they manage; unrelated projects are hidden in the UI and API. Task owners see only projects where they own work, with project context and documents; sub-project owners see and manage only their sub-projects |
 | Tasks | Search, sort, filters, tabs, quick-add and inline actions for authorized users; task owners get My tasks and a separate dependency-only sub-project view |
 | Task detail | Description, deliverables, subtasks, justified progress, activity, files, submission and review outcome |
 | Review | Submission decisions with reasons; requests are available outside demo mode |
@@ -50,6 +50,6 @@ The bell records task assignments, submissions, returns, acceptances, comments, 
 
 ## 🧪 Demo scope and boundaries
 
-The default demo build has one home for each role: the selected project overview for the PM, own sub-project for the sub-project owner, and My work for the task owner. PMs switch projects in the sidebar, with read-only access to projects managed by another PM. Task owners can raise dependencies only through a picker inside an owned task. The demo hides the project list and deferred controls. `VITE_DEMO_MODE=false` restores broader controls at build time. The API still enforces the demo role scope. Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
+The default demo build has one home for each role: the selected project overview for the PM, own sub-project for the sub-project owner, and My work for the task owner. PMs switch between projects they manage in the sidebar; other projects are unavailable even by direct URL or API call. Task owners can raise dependencies only through a picker inside an owned task. The demo hides the project list and deferred controls. `VITE_DEMO_MODE=false` restores broader controls at build time. The API still enforces the demo role scope. Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
 
 For the scripted sequence, start with the [demo guide](DEMO_GUIDE.md).

@@ -2,7 +2,7 @@
 
 This revision records the decisions in [Issue #18](https://github.com/biztel-engg/ProjMgmtSoftware/issues/18). The fictional Engine Development Programme has three sub-projects. The live loop is: PM overview, sub-project owner assignment, task owner evidence and submission, return with reason, correction and resubmission, sub-project owner sign-off, PM meeting and action item, then action item in its owner's My work and bell.
 
-> **Role-scope update, 1 Nov 2026:** PMs can see all projects. Sub-project owners can see all tasks in their own sub-projects. Task owners see only their assigned projects and own tasks in the main view; a separate limited sub-project task view is available for raising dependencies. This supersedes the broad same-sub-project commenting and hidden-dependency assumptions below. See [current project behavior](PROJECT.md).
+> **Role-scope update, 1 Nov 2026:** PMs can see projects they manage. Sub-project owners can see all tasks in their own sub-projects. Task owners see only their assigned projects and own tasks in the main view; a separate limited sub-project task view is available for raising dependencies. This supersedes the broad same-sub-project commenting and hidden-dependency assumptions below. See [current project behavior](PROJECT.md).
 
 ## Roles and permissions
 
@@ -10,7 +10,7 @@ The PM alone creates or edits a sub-project's name, Objective, due date, and own
 
 ## Demo presentation
 
-PMs use a single project switcher in the sidebar; other PMs' projects are read-only. The real organisation name appears once in the sidebar. Task history uses readable sentences, and due dates use a common date format with relative labels. The demo interface hides groups, reassignment and extension requests, and “Linked to”; their schema and APIs stay intact. Task owners raise dependencies from the task detail page. `VITE_DEMO_MODE=false` at frontend build time restores deferred controls.
+PMs use a single project switcher in the sidebar for projects they manage; unrelated projects are hidden. The real organisation name appears once in the sidebar. Task history uses readable sentences, and due dates use a common date format with relative labels. The demo interface hides groups, reassignment and extension requests, and “Linked to”; their schema and APIs stay intact. Task owners raise dependencies from the task detail page. `VITE_DEMO_MODE=false` at frontend build time restores deferred controls.
 
 The at-risk panel includes overdue open tasks, tasks due within three days that have not started, tasks with no update beyond the configured threshold, and explicit risk flags. The stale rule excludes Done and Submitted. An overdue Submitted task reads “Overdue, awaiting review.” The reset seed supplies Crankshaft stress analysis (overdue), Friction loss estimation (due in two days and not started), and Cooling jacket design (stale). My work groups Due this week as today through six days ahead, then Later.
 

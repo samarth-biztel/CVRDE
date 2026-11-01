@@ -10,22 +10,16 @@ try{
   await page.getByTestId('login-submit').click();
   const picker=page.locator('.sidebar-project select');
   await picker.waitFor();
-  await page.waitForFunction(()=>document.querySelectorAll('.sidebar-project select option').length>=3);
+  await page.waitForFunction(()=>document.querySelectorAll('.sidebar-project select option').length>=2);
   await page.waitForFunction(()=>document.querySelector('.sidebar-project select')?.selectedOptions[0]?.textContent==='Engine Development Programme');
   const options=await picker.locator('option').allTextContents();
   assert.ok(options.includes('Engine Development Programme'));
-  assert.ok(options.includes('BiztelAI_Work'));
-  await picker.selectOption({label:'BiztelAI_Work'});
-  await page.getByRole('heading',{name:'BiztelAI_Work'}).waitFor();
-  await page.getByText('No sub-projects in this project yet.').waitFor();
-  assert.equal(await page.getByTestId('nav-settings').count(),0);
-  assert.equal(await page.getByTestId('nav-pending').count(),0);
+  assert.ok(!options.includes('BiztelAI_Work'));
+  assert.ok(!options.includes('TEAL_DEMO'));
+  await page.getByTestId('nav-settings').waitFor();
+  await page.getByTestId('nav-pending').waitFor();
   const projectId=Number(await picker.inputValue());
-  for(const path of [`/projects/${projectId}`,`/projects/${projectId}/risk`,`/projects/${projectId}/members`,`/projects/${projectId}/milestones`,`/projects/${projectId}/documents`]){
-    const response=await page.request.get(`${origin}/api/v1${path}`);
-    assert.equal(response.status(),200,path);
-  }
-  assert.equal((await page.request.patch(`${origin}/api/v1/projects/${projectId}`,{data:{name:'No edit'}})).status(),404);
+  assert.equal((await page.request.get(`${origin}/api/v1/projects/${projectId}`)).status(),200);
   await page.getByRole('button',{name:'Project details'}).click();
   await page.getByRole('heading',{name:'Project details'}).waitFor();
   await page.locator('.project-overview-facts').waitFor();
@@ -44,9 +38,8 @@ try{
   if(process.env.CVRDE_SCREENSHOTS){await page.locator('.notification-row').first().waitFor();await page.screenshot({path:'.notification-preview.png'})}
   assert.equal(await page.locator('.notification-popover').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
   assert.equal(await page.locator('.notification-list').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
-  await picker.selectOption({label:'Engine Development Programme'});
-  await page.getByTestId('nav-settings').waitFor();
+  await page.getByTestId('nav-overview').click();
   await page.locator('.demo-subproject-grid button').first().waitFor();
   assert.equal(await page.locator('.demo-subproject-grid button').count(),3);
-  console.log('PM project switch, read-only access, project layout, and notification panel passed.');
+  console.log('PM project picker scope, project layout, and notification panel passed.');
 }finally{await browser.close()}

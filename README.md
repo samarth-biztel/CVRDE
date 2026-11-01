@@ -25,7 +25,7 @@ The reset removes the named disposable projects (`Engine Component Development â
 
 On the sign-in screen, choose a demo person; the form fills their credentials. Read the [setup guide](docs/SETUP.md) before using an existing or hosted database: resetting replaces the named fictional demo projects.
 
-> **Demo UI:** PMs land on a project overview and can switch projects from the sidebar. Projects managed by another PM are read-only. Sub-project owners land on their own sub-project, and task owners on My work. Task owners can choose peer tasks only from the dependency picker inside an owned task. `VITE_DEMO_MODE` defaults to on; set it to `false` **before building the frontend** to show deferred controls. See [configuration](docs/CONFIGURATION.md#demo-mode).
+> **Demo UI:** PMs land on a project overview and can switch between projects they manage from the sidebar. Other PMs' projects are hidden. Sub-project owners land on their own sub-project, and task owners on My work. Task owners can choose peer tasks only from the dependency picker inside an owned task. `VITE_DEMO_MODE` defaults to on; set it to `false` **before building the frontend** to show deferred controls. See [configuration](docs/CONFIGURATION.md#demo-mode).
 
 ## ðŸ§­ At a glance
 
