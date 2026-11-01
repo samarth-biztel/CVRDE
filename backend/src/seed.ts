@@ -130,12 +130,12 @@ try{
     const inputAction=await work(design,'Update simulation inputs with revised targets','scientist1.demo',-5,'DONE','MEDIUM','pm.demo',meeting!.id,meetingSource);
     await work(design,'Share CFD assumptions with Testing team','scientist1.demo',5,'IN_PROGRESS','MEDIUM','pm.demo',meeting!.id,meetingSource);
     await work(prototype,'Vendor selection for cylinder block casting','prototype.demo',-12,'DONE');
-    await work(prototype,'Procure prototype components','task2.demo',-5,'DONE');
+    await work(prototype,'Procure prototype components','prototype.demo',-5,'DONE');
     await work(prototype,'Assemble first prototype engine','prototype.demo',10,'IN_PROGRESS','HIGH');
-    await work(prototype,'Instrumentation for prototype','task2.demo',20,'NOT_STARTED');
+    await work(prototype,'Instrumentation for prototype','prototype.demo',20,'NOT_STARTED');
     await work(testing,'Prepare dyno test plan','testing.demo',25,'NOT_STARTED');
-    await work(testing,'Emissions test procedure','scientist2.demo',30,'NOT_STARTED');
-    await work(testing,'Durability test plan','task2.demo',40,'NOT_STARTED');
+    await work(testing,'Emissions test procedure','testing.demo',30,'NOT_STARTED');
+    await work(testing,'Durability test plan','testing.demo',40,'NOT_STARTED');
     const baselineMilestone=await one<{id:number}>(tx,'INSERT INTO milestones(project_id,name,due_date,created_by) VALUES($1,$2,$3,$4) RETURNING id',[programmeId,'Design baseline ready',day(15),ids['pm.demo']]);
     await query(tx,'UPDATE tasks SET milestone_id=$1 WHERE id=ANY($2::bigint[])',[baselineMilestone!.id,[targets,piston,cfd,thermalHead]]);
     await history(tx,programmeId,null,'MILESTONE_CREATED',ids['pm.demo'],{milestone_id:baselineMilestone!.id,name:'Design baseline ready',due_date:day(15)});
@@ -155,6 +155,8 @@ try{
     await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],thermalHead,'Result returned: Cylinder head thermal analysis','SKIPPED']);
     const brief=pdf('Fictional Engine Development Programme design brief. No real CVRDE or DRDO data.');
     await query(tx,'INSERT INTO attachments(project_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)',[programmeId,'project:design_brief','engine-design-brief.pdf',randomUUID(),'application/pdf',brief.length,ids['pm.demo'],brief]);
+    // Remove the five named disposable projects; preserve TEAL_DEMO, BiztelAI_Work, and any new unrelated projects.
+    await query(tx,'DELETE FROM projects WHERE id<>$1 AND name=ANY($2::text[])',[programmeId,[demo,'Sample1','ABC','123','SAM']]);
   });
   console.log(`Demo project reset; usernames: ${Object.keys(ids).join(', ')}. Public demo password: ${demoPassword}.`);
 }finally{await pool.end();}

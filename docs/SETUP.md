@@ -22,7 +22,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to the Express API on `http://
 | `npm run build` | Type-check and build both workspaces |
 | `npm run start:local` | Build and serve the app locally from one process |
 | `npm run migrate` | Apply SQL migrations |
-| `npm run reset:demo` | Migrate and reseed fictional demo projects |
+| `npm run reset:demo` | Migrate, reseed Engine Development Programme, and remove the five named disposable projects; preserves `TEAL_DEMO` and `BiztelAI_Work` |
 | `npm test` | Run backend workflow tests |
 | `npm run smoke` | Build and run compatibility smoke checks |
 | `npm run check:vercel-entry` | Verify the serverless routing entry |

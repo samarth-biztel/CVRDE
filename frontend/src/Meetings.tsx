@@ -21,7 +21,7 @@ export function MeetingsPanel({projectId,subProjectId,user,members,onMeeting,run
 }
 export function MeetingDetail({meetingId,user,onTask,onBack,run}:{meetingId:number;user:User;onTask:(id:number)=>void;onBack:()=>void;run:Run}){
   const meeting=useQuery({queryKey:['meeting',meetingId],queryFn:()=>api<Meeting>(`/meetings/${meetingId}`),refetchInterval:5000});
-  const members=useQuery({queryKey:['members',meeting.data?.project_id],queryFn:()=>api<User[]>(`/projects/${meeting.data?.project_id}/members`),enabled:!!meeting.data?.project_id});
+  const members=useQuery({queryKey:['meeting-members',meeting.data?.project_id,meeting.data?.sub_project_id],queryFn:()=>api<User[]>(user.role==='PM'?`/projects/${meeting.data?.project_id}/members`:`/sub-projects/${meeting.data?.sub_project_id}/assignees`),enabled:!!meeting.data?.can_edit});
   const [editing,setEditing]=useState(false),[adding,setAdding]=useState(false),[items,setItems]=useState<ActionDraft[]>([blank()]);
   const record=meeting.data,people=[user,...(members.data||[]).filter(member=>member.id!==user.id)];
   if(!record)return <section className="card"><p>Loading meeting…</p></section>;

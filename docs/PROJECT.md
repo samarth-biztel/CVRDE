@@ -50,6 +50,6 @@ The bell records task assignments, submissions, returns, acceptances, comments, 
 
 ## 🧪 Demo scope and boundaries
 
-The default demo build hides groups, reassignment and extension requests, full prerequisite editing on task detail, and the “Linked to” task control. Task owners can still raise dependencies from the separate sub-project task view and see existing prerequisites on their tasks. The schema and APIs remain, and `VITE_DEMO_MODE=false` restores the broader controls at build time. This updates the earlier [demo plan](DEMO_BUILD_PLAN.md). Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
+The default demo build has one home for each role: programme overview for the PM, own sub-project for the sub-project owner, and My work for the task owner. Task owners can raise dependencies only through a picker inside an owned task. The demo hides project switching, the project list, and deferred controls. `VITE_DEMO_MODE=false` restores broader controls at build time. The API still enforces the demo role scope. Attachments currently live in PostgreSQL; object storage is a future option. All demo accounts and sample files are fictional.
 
 For the scripted sequence, start with the [demo guide](DEMO_GUIDE.md).

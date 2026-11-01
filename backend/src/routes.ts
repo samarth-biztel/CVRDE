@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { db, one, query } from './db.js';
-import { authenticate, currentUser, getProject, handler, history, HttpError, issueSession, notify, projectManager, projectMember, role, taskAccess, taskById, uid, visibleTaskIds, type Task, type User } from './core.js';
+import { authenticate, currentUser, demoScope, getProject, handler, history, HttpError, issueSession, notify, projectManager, projectMember, role, taskAccess, taskById, uid, visibleTaskIds, type Task, type User } from './core.js';
 import { fileRoutes } from './files.js';
 import { meetingRoutes } from './meetings.js';
 import { milestoneRoutes } from './milestones.js';
@@ -19,7 +19,7 @@ type SubProject={id:number;project_id:number;name:string;objective:string;owner_
 const subProjectInput=z.object({name:z.string().trim().min(1).max(200),objective:z.string().trim().max(10000),owner_id:z.number().int().positive(),due_date:z.string().date()});
 async function subProjectById(subProjectId:number){const item=await one<SubProject>(db,'SELECT id,project_id,name,objective,owner_id,due_date FROM sub_projects WHERE id=$1',[subProjectId]);if(!item)throw new HttpError(404,'Sub-project not found');return item;}
 async function canEditTask(user:User,task:Task){if(user.role==='PM'&&user.id===task.manager_id)return;if(task.sub_project_id&&user.id===task.sub_project_owner_id)return;throw new HttpError(task.sub_project_id?403:404,'Only the PM or sub-project owner can edit this task');}
-function canReviewTask(user:User,task:Task){return user.role==='PM'&&user.id===task.manager_id||!!task.sub_project_id&&(user.id===task.created_by||user.id===task.sub_project_owner_id);}
+function canReviewTask(user:User,task:Task){return user.role==='PM'&&user.id===task.manager_id||!!task.sub_project_id&&task.project_name==='Engine Development Programme'&&user.id===task.sub_project_owner_id;}
 async function checkProjectDeadline(projectId:number,dueDate:string|null|undefined){
   if(!dueDate)return;
   const project=await one<{target_date:string|null}>(db,'SELECT target_date FROM projects WHERE id=$1',[projectId]);
@@ -61,7 +61,13 @@ api.post('/auth/logout',handler(async(req,res)=>{
   res.clearCookie('cvrde_session',{path:'/'});send(res,{ok:true});
 }));
 api.get('/auth/me',handler(async(_req,res)=>{send(res,currentUser(res));}));
-api.get('/users',handler(async(_req,res)=>{const u=currentUser(res);const rows=await query(db,"SELECT id,username,full_name,email,role,active FROM users WHERE $1='ADMIN' OR active AND ($1='PM' OR role IN ('MEMBER','REVIEWER')) ORDER BY id",[u.role]);send(res,rows);}));
+api.get('/me/context',handler(async(_req,res)=>{
+  const u=currentUser(res);
+  const project=await one<{id:number;name:string}>(db,`SELECT p.id,p.name FROM projects p WHERE ($1='PM' AND p.manager_id=$2) OR ($1='MEMBER' AND p.name='Engine Development Programme' AND (EXISTS(SELECT 1 FROM sub_projects sp WHERE sp.project_id=p.id AND sp.owner_id=$2) OR EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.owner_id=$2))) ORDER BY (p.name='Engine Development Programme') DESC,p.id DESC LIMIT 1`,[u.role,u.id]);
+  const subProject=project?await one<{id:number;name:string;owner_id:number}>(db,`SELECT sp.id,sp.name,sp.owner_id FROM sub_projects sp WHERE sp.project_id=$1 AND (sp.owner_id=$2 OR EXISTS(SELECT 1 FROM tasks t WHERE t.sub_project_id=sp.id AND t.owner_id=$2)) ORDER BY (sp.owner_id=$2) DESC,sp.id LIMIT 1`,[project.id,u.id]):null;
+  send(res,{project,sub_project:subProject});
+}));
+api.get('/users',handler(async(_req,res)=>{const u=currentUser(res);role(u,['PM','ADMIN']);const rows=await query(db,"SELECT id,username,full_name,email,role,active FROM users WHERE $1='ADMIN' OR active AND ($1='PM' OR role IN ('MEMBER','REVIEWER')) ORDER BY id",[u.role]);send(res,rows);}));
 api.patch('/users/:userId/active',handler(async(req,res)=>{
   const u=currentUser(res);role(u,['ADMIN']);const userId=id(req.params.userId),{active}=parse(z.object({active:z.boolean()}),req.body);
   if(userId===u.id&&!active)throw new HttpError(400,'You cannot deactivate your own account');
@@ -79,6 +85,7 @@ api.post('/projects/:projectId/users',handler(async(req,res)=>{
 
 api.get('/projects',handler(async(_req,res)=>{
   const u=currentUser(res);
+  if(u.role==='MEMBER')throw new HttpError(404,'Not found');
   send(res,await query(db,`SELECT DISTINCT p.*,manager.full_name AS manager_name,
     (SELECT count(*)::int FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1)) AS task_total,
     (SELECT count(*)::int FROM tasks t LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=p.id AND t.status='DONE' AND ($2='PM' OR t.owner_id=$1 OR sp.owner_id=$1)) AS task_done,
@@ -122,15 +129,14 @@ api.patch('/projects/:projectId',handler(async(req,res)=>{
   });
   send(res,updated);
 }));
-api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await one(db,'SELECT id,name,description,target_date,manager_id,stale_after_days FROM projects WHERE id=$1',[pid]));}));
+api.get('/projects/:projectId',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await demoScope(u,pid,'project');send(res,await one(db,'SELECT id,name,description,target_date,manager_id,stale_after_days FROM projects WHERE id=$1',[pid]));}));
 api.get('/projects/:projectId/sub-projects',handler(async(req,res)=>{
-  const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
+  const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);if(u.role!=='PM'&&!await one(db,'SELECT 1 FROM sub_projects WHERE project_id=$1 AND owner_id=$2',[pid,u.id]))throw new HttpError(404,'Not found');
   const rows=await query(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done,true AS can_open
     FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id
-    WHERE sp.project_id=$1 AND ($3='PM' OR sp.owner_id=$2
-      OR EXISTS(SELECT 1 FROM tasks own WHERE own.sub_project_id=sp.id AND own.owner_id=$2))
+    WHERE sp.project_id=$1 AND ($3='PM' OR sp.owner_id=$2)
     GROUP BY sp.id,owner.full_name ORDER BY sp.due_date,sp.id`,[pid,u.id,u.role]);
-  send(res,u.role==='MEMBER'?rows.map(row=>Number(row.owner_id)===u.id?row:{id:row.id,project_id:row.project_id,name:row.name,owner_id:row.owner_id,owner_name:row.owner_name,due_date:row.due_date,can_open:true}):rows);
+  send(res,rows);
 }));
 api.post('/projects/:projectId/sub-projects',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);const d=parse(subProjectInput,req.body);
@@ -140,7 +146,7 @@ api.post('/projects/:projectId/sub-projects',handler(async(req,res)=>{
   const item=await db.transaction().execute(async tx=>{const row=await one<SubProject>(tx,'INSERT INTO sub_projects(project_id,name,objective,owner_id,due_date) VALUES($1,$2,$3,$4,$5) RETURNING *',[pid,d.name,d.objective,d.owner_id,d.due_date]);await history(tx,pid,null,'SUB_PROJECT_CREATED',u.id,{sub_project_id:row!.id,name:d.name,owner_id:d.owner_id});return row;});send(res,item,201);
 }));
 api.get('/sub-projects/:subProjectId',handler(async(req,res)=>{
-  const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await projectMember(u,sp.project_id);
+  const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await demoScope(u,sp.project_id,'subproject',sp.id);
   const project=await getProject(sp.project_id);
   if(u.id!==project.manager_id&&u.id!==sp.owner_id&&!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[sp.id,u.id]))throw new HttpError(404,'Sub-project not found');
   const row=await one(db,`SELECT sp.*,owner.full_name AS owner_name,count(t.id)::int AS task_total,count(t.id) FILTER (WHERE t.status='DONE')::int AS task_done FROM sub_projects sp JOIN users owner ON owner.id=sp.owner_id LEFT JOIN tasks t ON t.sub_project_id=sp.id WHERE sp.id=$1 GROUP BY sp.id,owner.full_name`,[sp.id]);
@@ -154,7 +160,7 @@ api.patch('/sub-projects/:subProjectId',handler(async(req,res)=>{
   const entries=Object.entries(d),updated=await db.transaction().execute(async tx=>{const fields=entries.map(([key],i)=>`${key}=$${i+1}`).join(',');const row=await one(tx,`UPDATE sub_projects SET ${fields},updated_at=now() WHERE id=$${entries.length+1} RETURNING *`,[...entries.map(([,value])=>value),sp.id]);await history(tx,sp.project_id,null,'SUB_PROJECT_UPDATED',u.id,{sub_project_id:sp.id,changes:d});return row;});send(res,updated);
 }));
 api.get('/sub-projects/:subProjectId/tasks',handler(async(req,res)=>{
-  const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await projectMember(u,sp.project_id);
+  const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await demoScope(u,sp.project_id,'subproject',sp.id);
   const project=await getProject(sp.project_id);
   if(u.id!==project.manager_id&&u.id!==sp.owner_id&&!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[sp.id,u.id]))throw new HttpError(404,'Sub-project not found');
   if(u.role==='MEMBER'&&sp.owner_id!==u.id){
@@ -169,7 +175,7 @@ api.post('/projects/:projectId/members',handler(async(req,res)=>{
   await db.transaction().execute(async tx=>{await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[pid,user_id]);await history(tx,pid,null,'PROJECT_MEMBER_ADDED',u.id,{user_id});});send(res,{ok:true},201);
 }));
 api.get('/projects/:projectId/members',handler(async(req,res)=>{
-  const u=currentUser(res),pid=id(req.params.projectId),project=await projectMember(u,pid);
+  const u=currentUser(res),pid=id(req.params.projectId),project=await projectManager(u,pid);
   if(u.role==='MEMBER'&&!await one(db,'SELECT 1 FROM sub_projects WHERE project_id=$1 AND owner_id=$2 LIMIT 1',[pid,u.id])){
     return send(res,await query(db,`SELECT DISTINCT person.id,person.full_name,person.username,person.role FROM users person
       WHERE person.id=$3 OR person.id=$2
@@ -180,6 +186,10 @@ api.get('/projects/:projectId/members',handler(async(req,res)=>{
       ORDER BY person.id`,[pid,u.id,project.manager_id]));
   }
   send(res,await query(db,'SELECT u.id,u.full_name,u.username,u.role FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 ORDER BY u.id',[pid]));
+}));
+api.get('/sub-projects/:subProjectId/assignees',handler(async(req,res)=>{
+  const u=currentUser(res),sp=await subProjectById(id(req.params.subProjectId));await demoScope(u,sp.project_id,'subproject',sp.id);
+  send(res,await query(db,'SELECT u.id,u.full_name,u.role FROM users u JOIN project_members pm ON pm.user_id=u.id WHERE pm.project_id=$1 AND u.active ORDER BY u.full_name',[sp.project_id]));
 }));
 api.delete('/projects/:projectId/members/:userId',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId),memberId=id(req.params.userId);await projectManager(u,pid);
@@ -192,17 +202,16 @@ api.get('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
   if(req.query.scope==='dependencies'){
     role(u,['MEMBER']);
+    const sourceTask=await taskById(id(req.query.task_id));if(sourceTask.project_id!==pid||sourceTask.owner_id!==u.id||!sourceTask.sub_project_id)throw new HttpError(404,'Task not found');
     return send(res,await query(db,`SELECT t.id,t.project_id,t.sub_project_id,t.title,t.status,t.owner_id,owner.full_name AS owner_name,t.due_date,sp.name AS sub_project_name
       FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id
-      WHERE t.project_id=$1 AND t.owner_id<>$2 AND EXISTS(
-        SELECT 1 FROM tasks own WHERE own.sub_project_id=t.sub_project_id AND own.owner_id=$2)
-      ORDER BY sp.name,t.due_date NULLS LAST,t.id`,[pid,u.id]));
+      WHERE t.sub_project_id=$1 AND t.owner_id<>$2 ORDER BY t.due_date NULLS LAST,t.id`,[sourceTask.sub_project_id,u.id]));
   }
   send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND ($3='PM' OR p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR ($3='REVIEWER' AND t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id,u.role]));
 }));
 api.get('/tasks/mine',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['MEMBER']);
-  send(res,await query(db,`SELECT t.*,p.name AS project_name,sp.name AS sub_project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.owner_id=$1 OR sp.owner_id=$1 ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
+  send(res,await query(db,`SELECT t.*,p.name AS project_name,sp.name AS sub_project_name FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE p.name='Engine Development Programme' AND (t.owner_id=$1 OR sp.owner_id=$1) ORDER BY t.due_date NULLS LAST,t.id`,[u.id]));
 }));
 api.post('/projects/:projectId/tasks',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);
@@ -305,7 +314,7 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
 api.get('/me/notifications',handler(async(_req,res)=>{
-  const u=currentUser(res);send(res,await query(db,'SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id WHERE n.to_user_id=$1 ORDER BY n.sent_at DESC,n.id DESC LIMIT 100',[u.id]));
+  const u=currentUser(res);send(res,await query(db,"SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id JOIN projects p ON p.id=t.project_id WHERE n.to_user_id=$1 AND ($2='PM' OR p.name='Engine Development Programme') ORDER BY n.sent_at DESC,n.id DESC LIMIT 100",[u.id,u.role]));
 }));
 api.post('/me/notifications/read-all',handler(async(_req,res)=>{
   const u=currentUser(res);await db.transaction().execute(async tx=>{const rows=await query(tx,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL RETURNING id',[u.id]);if(rows.length)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATIONS_READ',u.id,JSON.stringify({count:rows.length})]);});send(res,{ok:true});
@@ -316,7 +325,7 @@ api.post('/me/notifications/:notificationId/read',handler(async(req,res)=>{
   if(!row)throw new HttpError(404,'Notification not found');send(res,{ok:true});
 }));
 
-api.get('/projects/:projectId/groups',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectMember(u,pid);send(res,await query(db,`SELECT g.*,array_remove(array_agg(gm.user_id::int),NULL) AS member_ids FROM project_groups g LEFT JOIN group_members gm ON gm.group_id=g.id WHERE g.project_id=$1 GROUP BY g.id ORDER BY g.id`,[pid]));}));
+api.get('/projects/:projectId/groups',handler(async(req,res)=>{const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);send(res,await query(db,`SELECT g.*,array_remove(array_agg(gm.user_id::int),NULL) AS member_ids FROM project_groups g LEFT JOIN group_members gm ON gm.group_id=g.id WHERE g.project_id=$1 GROUP BY g.id ORDER BY g.id`,[pid]));}));
 api.post('/projects/:projectId/groups',handler(async(req,res)=>{
   const u=currentUser(res),pid=id(req.params.projectId);await projectManager(u,pid);
   const d=parse(z.object({name:z.string().trim().min(1).max(100),description:z.string().max(1000).default(''),can_view_results:z.boolean().default(false),can_comment:z.boolean().default(true),can_link_pendency:z.boolean().default(true)}),req.body);
@@ -471,19 +480,19 @@ api.get('/me/submissions',handler(async(_req,res)=>{
     SELECT a.id,a.task_id,t.project_id,t.title,p.name,'REASSIGNMENT',a.created_at,a.status,a.decision_comment,a.reason FROM reassignments a JOIN tasks t ON t.id=a.task_id JOIN projects p ON p.id=t.project_id WHERE a.requested_by=$1
     UNION ALL
     SELECT q.id,q.blocked_task_id,t.project_id,t.title,p.name,'PREREQUISITE',q.created_at,CASE WHEN q.status='AWAITING_APPROVAL' THEN 'PENDING' WHEN q.status='REJECTED' THEN 'REJECTED' ELSE 'APPROVED' END,q.resolution,q.description FROM pendencies q JOIN tasks t ON t.id=q.blocked_task_id JOIN projects p ON p.id=t.project_id WHERE q.raised_by=$1
-  ) submissions ORDER BY created_at DESC,kind,id DESC`,[u.id]));
+  ) submissions WHERE $2='PM' OR project_name='Engine Development Programme' ORDER BY created_at DESC,kind,id DESC`,[u.id,u.role]));
 }));
 
 api.get('/me/reviewer-scope',handler(async(_req,res)=>{
   const u=currentUser(res);
-  const row=await one<{can_review:boolean}>(db,'SELECT EXISTS(SELECT 1 FROM sub_projects WHERE owner_id=$1) OR EXISTS(SELECT 1 FROM tasks WHERE sub_project_id IS NOT NULL AND created_by=$1) AS can_review',[u.id]);
+  const row=await one<{can_review:boolean}>(db,"SELECT EXISTS(SELECT 1 FROM sub_projects sp JOIN projects p ON p.id=sp.project_id WHERE sp.owner_id=$1 AND p.name='Engine Development Programme') AS can_review",[u.id]);
   send(res,{can_review:u.role==='PM'||u.role==='REVIEWER'||!!row?.can_review});
 }));
 api.get('/me/pending-actions',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['PM','REVIEWER','MEMBER']);
-  if(u.role==='MEMBER'){const scope=await one(db,'SELECT 1 FROM sub_projects WHERE owner_id=$1 UNION SELECT 1 FROM tasks WHERE sub_project_id IS NOT NULL AND created_by=$1 LIMIT 1',[u.id]);if(!scope)throw new HttpError(403,'Review is available to sub-project owners only');}
+  if(u.role==='MEMBER'){const scope=await one(db,"SELECT 1 FROM sub_projects sp JOIN projects p ON p.id=sp.project_id WHERE sp.owner_id=$1 AND p.name='Engine Development Programme' LIMIT 1",[u.id]);if(!scope)throw new HttpError(403,'Review is available to sub-project owners only');}
   const [results,extensions,reassignments,approvals,resolutions]=await Promise.all([
-    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,sp.name AS sub_project_name,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE (p.manager_id=$1 OR sp.owner_id=$1 OR t.created_by=$1) AND r.review_status='PENDING'`,[u.id]),
+    query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,sp.name AS sub_project_name,'RESULT_REVIEW' AS kind,r.submitted_at AS requested_at,r.work_completed AS summary,u.full_name AS submitted_by,(SELECT coalesce(json_agg(json_build_object('id',a.id,'name',a.original_name,'mime_type',a.mime_type,'uploaded_at',a.uploaded_at) ORDER BY a.id),'[]'::json) FROM attachments a WHERE a.result_id=r.id) AS files FROM task_results r JOIN tasks t ON t.id=r.task_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id JOIN users u ON u.id=r.submitted_by WHERE (p.manager_id=$1 OR (sp.owner_id=$1 AND p.name='Engine Development Programme')) AND r.review_status='PENDING'`,[u.id]),
     query(db,`SELECT e.id,t.id AS task_id,t.project_id,t.title,t.due_date,'EXTENSION' AS kind,e.created_at AS requested_at,e.reason AS summary,u.full_name AS submitted_by,e.new_due_date FROM due_date_extensions e JOIN tasks t ON t.id=e.task_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=e.requested_by WHERE p.manager_id=$1 AND e.status='PENDING'`,[u.id]),
     query(db,`SELECT r.id,t.id AS task_id,t.project_id,t.title,t.due_date,'REASSIGNMENT' AS kind,r.created_at AS requested_at,r.reason AS summary,u.full_name AS submitted_by,r.work_from,r.work_until,nu.full_name AS new_owner_name FROM reassignments r JOIN tasks t ON t.id=r.task_id JOIN users u ON u.id=r.requested_by JOIN users nu ON nu.id=r.new_owner_id WHERE r.reviewer_id=$1 AND r.status='PENDING'`,[u.id]),
     query(db,`SELECT p.id,p.blocked_task_id AS task_id,t.project_id,t.title,t.due_date,'PENDENCY_APPROVAL' AS kind,p.created_at AS requested_at,p.description AS summary,u.full_name AS submitted_by FROM pendencies p JOIN tasks t ON t.id=p.blocked_task_id JOIN users u ON u.id=p.raised_by WHERE p.approver_id=$1 AND p.status='AWAITING_APPROVAL'`,[u.id]),

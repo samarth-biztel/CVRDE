@@ -4,7 +4,7 @@ import { db, one, query, type Executor } from './db.js';
 import {emailEnabled,sendNotificationEmail} from './email.js';
 
 export type User = { id: number; username: string; full_name: string; email: string; role: 'ADMIN' | 'PM' | 'MEMBER' | 'REVIEWER' };
-export type Task = { id: number; project_id: number; sub_project_id: number | null; sub_project_owner_id: number | null; parent_task_id: number | null; milestone_id: number | null; risk_flag: boolean; risk_reason: string | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
+export type Task = { id: number; project_id: number; project_name:string; sub_project_id: number | null; sub_project_owner_id: number | null; parent_task_id: number | null; milestone_id: number | null; risk_flag: boolean; risk_reason: string | null; owner_id: number; manager_id: number; group_id: number | null; visibility: string; status: string; title: string; description: string; priority: string; due_date: string | null; plm_ref: string | null; progress_percent: number; created_by: number };
 export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 export const assert = (value: unknown, status: number, message: string): asserts value => { if (!value) throw new HttpError(status, message); };
 export const uid = (value: unknown) => { const n = Number(value); if (!Number.isSafeInteger(n) || n <= 0) throw new HttpError(400, 'Invalid ID'); return n; };
@@ -36,6 +36,7 @@ export async function getProject(projectId: number) {
 }
 export async function projectMember(user: User, projectId: number) {
   const p = await getProject(projectId);
+  if(user.role==='MEMBER'&&p.name!=='Engine Development Programme')throw new HttpError(404,'Project not found');
   if (user.role === 'PM' || p.manager_id === user.id) return p;
   const member = user.role === 'MEMBER'
     ? await one(db,`SELECT 1 WHERE
@@ -50,19 +51,34 @@ export async function projectManager(user: User, projectId: number) {
   if (p.manager_id !== user.id || user.role !== 'PM') throw new HttpError(404,'Project not found');
   return p;
 }
+export async function demoScope(user: User, projectId: number, resource: 'project'|'subproject'|'task'|'meeting'|'team', subProjectId?: number|null): Promise<void> {
+  const project=await getProject(projectId);
+  if(user.role==='PM' && project.manager_id===user.id)return;
+  if(user.role!=='MEMBER')throw new HttpError(404,'Not found');
+  if(resource==='project'||resource==='team')throw new HttpError(404,'Not found');
+  const ownsSubProject=!!subProjectId&&!!await one(db,'SELECT 1 FROM sub_projects WHERE id=$1 AND project_id=$2 AND owner_id=$3',[subProjectId,projectId,user.id]);
+  if(resource==='subproject'||resource==='task'){
+    if(ownsSubProject)return;
+    throw new HttpError(404,'Not found');
+  }
+  if(ownsSubProject||!!subProjectId&&!!await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[subProjectId,user.id]))return;
+  throw new HttpError(404,'Not found');
+}
 export async function taskById(id: number): Promise<Task> {
-  const task = await one<Task>(db,'SELECT t.*,p.manager_id,sp.owner_id AS sub_project_owner_id FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.id=$1',[id]);
+  const task = await one<Task>(db,'SELECT t.*,p.manager_id,p.name AS project_name,sp.owner_id AS sub_project_owner_id FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.id=$1',[id]);
   if (!task) throw new HttpError(404,'Task not found');
   return task;
 }
 export type Action = 'VIEW' | 'EDIT' | 'RESULTS' | 'COMMENT' | 'LINK';
 export async function taskAccess(user: User, task: Task, action: Action): Promise<'FULL' | 'LIMITED'> {
+  if(user.role==='MEMBER'&&task.project_name!=='Engine Development Programme')throw new HttpError(404,'Task not found');
   if (user.id === task.manager_id || user.id === task.owner_id || user.id === task.sub_project_owner_id || task.sub_project_id && user.id===task.created_by) return 'FULL';
   if (user.role === 'PM' && ['VIEW','RESULTS','COMMENT'].includes(action)) return 'FULL';
-  if (task.sub_project_id && (action === 'VIEW' || action === 'LINK')) {
+  if (task.sub_project_id && action === 'LINK') {
     const teammate = await one(db,'SELECT 1 FROM tasks WHERE sub_project_id=$1 AND owner_id=$2 LIMIT 1',[task.sub_project_id,user.id]);
-    if (teammate) return action === 'VIEW' ? 'LIMITED' : 'FULL';
+    if (teammate) return 'FULL';
   }
+  if(user.role==='MEMBER')throw new HttpError(404,'Task not found');
   if (task.visibility === 'GROUP' && task.group_id) {
     const permission = await one<{ can_view_results:boolean; can_comment:boolean; can_link_pendency:boolean }>(db,
       'SELECT g.can_view_results,g.can_comment,g.can_link_pendency FROM project_groups g JOIN group_members gm ON gm.group_id=g.id WHERE g.id=$1 AND gm.user_id=$2',[task.group_id,user.id]);

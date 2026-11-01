@@ -19,11 +19,13 @@ A fictional engine development programme showing how a PM structures work, assig
 1. Run `npm install`.
 2. Copy `.env.example` to `.env` and set `DATABASE_URL` for a **dedicated demo database**.
 3. Run `npm run reset:demo` to migrate and seed the fictional programme.
+
+The reset removes the named disposable projects (`Engine Component Development — Demo`, `Sample1`, `ABC`, `123`, `SAM`). It preserves `TEAL_DEMO`, `BiztelAI_Work`, and any unrelated project. The demo interface opens Engine Development Programme only.
 4. Run `npm run dev`, then open `http://localhost:5173`.
 
 On the sign-in screen, choose a demo person; the form fills their credentials. Read the [setup guide](docs/SETUP.md) before using an existing or hosted database: resetting replaces the named fictional demo projects.
 
-> **Demo UI:** Task owners can raise dependencies from a limited sub-project task view. `VITE_DEMO_MODE` defaults to on; set it to `false` **before building the frontend** to show groups, linked-task editing, the full prerequisite controls, and reassignment and due-date requests. See [configuration](docs/CONFIGURATION.md#demo-mode).
+> **Demo UI:** PMs land on the programme overview, sub-project owners on their own sub-project, and task owners on My work. Task owners can choose peer tasks only from the dependency picker inside an owned task. `VITE_DEMO_MODE` defaults to on; set it to `false` **before building the frontend** to show deferred controls. See [configuration](docs/CONFIGURATION.md#demo-mode).
 
 ## 🧭 At a glance
 

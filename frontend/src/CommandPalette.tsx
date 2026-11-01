@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Search} from 'lucide-react';
 import {api,type Task,type User} from './api';
+import {demoMode} from './demoMode';
 import {CommandDialog,CommandEmpty,CommandGroup,CommandInput,CommandItem,CommandList} from './components/ui/command';
 
 type Props={
@@ -15,6 +16,8 @@ type Props={
 };
 const pages=[
   {name:'Overview',screen:'overview'},
+  {name:'My sub-project',screen:'subproject'},
+  {name:'Meetings',screen:'meetings'},
   {name:'My work',screen:'mine'},
   {name:'Projects',screen:'projects'},
   {name:'Tasks',screen:'tasks'},
@@ -39,7 +42,7 @@ export default function CommandPalette({open,onClose,onNavigate,onTask,projectId
     <CommandList>
       <CommandEmpty>No matching pages or tasks.</CommandEmpty>
       <CommandGroup heading="PAGES">
-        {pages.filter(page=>role==='PM'? !['mine','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions',...(canReview?['pending']:[])].includes(page.screen)).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
+        {pages.filter(page=>demoMode?(role==='PM'?['overview','tasks','pending','meetings','settings'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':canReview?['subproject','tasks','pending','meetings'].includes(page.screen):['mine','meetings'].includes(page.screen)):(role==='PM'? !['mine','accounts'].includes(page.screen):role==='ADMIN'?page.screen==='accounts':role==='REVIEWER'?['pending','tasks'].includes(page.screen):['mine','projects','tasks','submissions',...(canReview?['pending']:[])].includes(page.screen))).map(page=><CommandItem data-testid={`command-page-${page.screen}`} key={page.screen} value={page.name} onSelect={()=>selectPage(page.screen)}>{page.name}<span className="text-xs text-[var(--muted)]">Open page</span></CommandItem>)}
       </CommandGroup>
       {!!tasks.data?.length&&<CommandGroup heading="TASKS">
         {tasks.data.map(task=><CommandItem data-testid={`command-task-${task.id}`} key={task.id} value={task.title} onSelect={()=>selectTask(task.id)}>{task.title}<span className="text-xs text-[var(--muted)]">{task.status.replaceAll('_',' ')}</span></CommandItem>)}
