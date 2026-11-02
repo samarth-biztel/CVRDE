@@ -100,7 +100,7 @@ try{
     await history(tx,pid,calibration,'PENDENCY_RAISED',ids['scientist1.demo'],{pendency_id:p!.id});
 
     // The current fictional programme is inserted last so it opens first in the project switcher.
-    const programme=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING id',['Engine Development Programme','Fictional 1.5 L petrol engine research and development programme. All people, results, and documents are demonstration data.',day(90),ids['pm.demo']]);
+    const programme=await one<{id:number}>(tx,'INSERT INTO projects(name,description,target_date,manager_id) VALUES($1,$2,$3,$4) RETURNING id',['Engine Development Programme','Develop and validate a new 1.5 L petrol engine through design, prototype build and testing.',day(90),ids['pm.demo']]);
     const programmeId=programme!.id;
     for(const name of ['scientist1.demo','prototype.demo','testing.demo','scientist2.demo','task2.demo'])await query(tx,'INSERT INTO project_members(project_id,user_id) VALUES($1,$2)',[programmeId,ids[name]]);
     async function subProject(name:string,owner:string,dueOffset:number,objective:string){const row=await one<{id:number}>(tx,'INSERT INTO sub_projects(project_id,name,objective,owner_id,due_date) VALUES($1,$2,$3,$4,$5) RETURNING id',[programmeId,name,objective,ids[owner],day(dueOffset)]);await history(tx,programmeId,null,'SUB_PROJECT_CREATED',ids['pm.demo'],{sub_project_id:row!.id,name,owner_id:ids[owner]});return row!.id;}
@@ -131,7 +131,9 @@ try{
     await work(design,'Share CFD assumptions with Testing team','scientist1.demo',5,'IN_PROGRESS','MEDIUM','pm.demo',meeting!.id,meetingSource);
     await work(prototype,'Vendor selection for cylinder block casting','prototype.demo',-12,'DONE');
     await work(prototype,'Procure prototype components','prototype.demo',-5,'DONE');
-    await work(prototype,'Assemble first prototype engine','prototype.demo',10,'IN_PROGRESS','HIGH');
+    const assembly=await work(prototype,'Assemble first prototype engine','prototype.demo',10,'IN_PROGRESS','HIGH');
+    await query(tx,"UPDATE tasks SET created_at=now()-interval '16 days',updated_at=now()-interval '16 days' WHERE id=$1",[assembly]);
+    await query(tx,"UPDATE task_history SET created_at=now()-interval '16 days' WHERE task_id=$1",[assembly]);
     await work(prototype,'Instrumentation for prototype','prototype.demo',20,'NOT_STARTED');
     await work(testing,'Prepare dyno test plan','testing.demo',25,'NOT_STARTED');
     await work(testing,'Emissions test procedure','testing.demo',30,'NOT_STARTED');

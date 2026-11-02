@@ -14,9 +14,9 @@ try{
   assert.equal(await sub.getByTestId('nav-projects').count(),0);await sub.locator('.role-home').waitFor();await sub.getByRole('heading',{name:'Design & Simulation'}).waitFor();assert.doesNotMatch(await sub.locator('.role-home').innerText(),/Prototype Build|Testing & Validation/);await sub.getByRole('button',{name:'New task'}).waitFor();
   const task=await login('scientist2.demo','mine');
   assert.equal(await task.getByTestId('nav-projects').count(),0);assert.equal(await task.getByTestId('nav-tasks').count(),0);assert.equal(await task.getByTestId('nav-submissions').count(),0);assert.equal(await task.getByTestId('nav-pending').count(),0);
-  await task.getByRole('heading',{name:'Submitted and outcomes'}).waitFor();
+  await task.locator('.home-task-table tbody tr').first().waitFor();
   await task.getByTestId('open-command-palette').click();assert.equal(await task.getByTestId('command-page-projects').count(),0);assert.equal(await task.getByTestId('command-page-tasks').count(),0);await task.keyboard.press('Escape');
-  await task.locator('.work-task-open').first().click();await task.getByRole('heading',{name:'Raise a dependency'}).waitFor();await task.waitForFunction(()=>document.querySelectorAll('select[aria-label="Task this depends on"] option').length>1);
+  await task.locator('.home-task-name').first().click();await task.getByRole('heading',{name:'Raise a dependency'}).waitFor();await task.waitForFunction(()=>document.querySelectorAll('select[aria-label="Task this depends on"] option').length>1);
   await task.getByTestId('nav-mine').click();
   await task.getByTestId('nav-meetings').click();await task.getByText('Design review',{exact:false}).first().waitFor();assert.equal(await task.getByRole('button',{name:'Record meeting'}).count(),0);
   await task.locator('.meeting-list-row').first().click();await task.getByRole('heading',{name:'Minutes'}).waitFor();assert.equal(await task.getByRole('button',{name:'Edit meeting'}).count(),0);
