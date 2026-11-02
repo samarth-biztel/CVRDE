@@ -7,6 +7,7 @@ async function login(username,home){const page=await browser.newPage({viewport:{
 try{
   const task=await login('scientist2.demo','My work');
   await task.locator('.home-task-table thead th').first().waitFor();
+  assert.equal(await task.getByRole('button',{name:'Go back'}).count(),0);
   const headers=await task.locator('.home-task-table thead th').allTextContents();
   assert.deepEqual(headers,['Task','Sub-project','Status','Due date','Timing','Action']);
   const fuel=task.locator('.home-task-table tbody tr').filter({hasText:'Fuel injection system bench test'});
@@ -22,23 +23,32 @@ try{
   await task.getByRole('button',{name:'Go back'}).click();
   await task.getByRole('heading',{name:'My work',exact:true}).waitFor();
   await fuel.waitFor();
+  assert.equal(await task.getByRole('button',{name:'Go back'}).count(),0);
   await task.getByTestId('nav-meetings').click();
   await task.getByRole('heading',{name:'Meetings',exact:true}).first().waitFor();
+  await task.getByRole('button',{name:'Go back'}).waitFor();
   await task.getByRole('button',{name:'Go back'}).click();
   await task.getByRole('heading',{name:'My work',exact:true}).waitFor();
+  assert.equal(await task.getByRole('button',{name:'Go back'}).count(),0);
 
   const sub=await login('prototype.demo','My sub-project');
+  await sub.locator('.home-task-table tbody tr').first().waitFor();
+  assert.equal(await sub.getByRole('button',{name:'Go back'}).count(),0);
   await sub.locator('.home-task-table tbody tr').first().getByRole('button',{name:'Review'}).click();
   await sub.getByRole('heading',{name:'Review submission'}).waitFor();
   await sub.getByRole('button',{name:'Go back'}).click();
   await sub.getByRole('heading',{name:'My sub-project',exact:true}).waitFor();
+  assert.equal(await sub.getByRole('button',{name:'Go back'}).count(),0);
 
   const pm=await login('pm.demo','Overview');
+  await pm.getByRole('button',{name:'Project details'}).waitFor();
+  assert.equal(await pm.getByRole('button',{name:'Go back'}).count(),0);
   await pm.getByRole('button',{name:'Project details'}).click();
   await pm.getByRole('heading',{name:'Project details',exact:true}).waitFor();
   assert.equal(await pm.getByRole('button',{name:'Back to overview'}).count(),0);
   await pm.getByRole('button',{name:'Go back'}).click();
   await pm.getByRole('heading',{name:'Overview',exact:true}).waitFor();
+  assert.equal(await pm.getByRole('button',{name:'Go back'}).count(),0);
   await pm.getByTestId('nav-tasks').click();
   await pm.getByRole('heading',{name:'Tasks',exact:true}).first().waitFor();
   await pm.locator('.workspace-table thead th.timing-column').waitFor();
