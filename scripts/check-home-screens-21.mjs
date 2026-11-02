@@ -23,7 +23,7 @@ try{
   await login(owner,'scientist1.demo');await waitForHome(owner,'My sub-project');
   await owner.locator('.home-task-table tbody tr').first().waitFor();
   assert.match(await owner.locator('.home-context-line').innerText(),/Engine Development Programme › Design & Simulation/);
-  assert.deepEqual(await owner.locator('.home-task-table thead th').allTextContents(),['Task','Owner','Status','Due','Action']);
+  assert.deepEqual(await owner.locator('.home-task-table thead th').allTextContents(),['Task','Owner','Status','Due date','Timing','Action']);
   assert.match(await owner.locator('.home-task-table tbody tr').first().innerText(),/Combustion chamber CFD simulation/);
   await owner.locator('.home-task-table tbody tr').first().getByRole('button',{name:'Review'}).waitFor();
   await owner.getByRole('button',{name:'Record meeting'}).waitFor();
@@ -36,7 +36,7 @@ try{
   const task=await browser.newPage({viewport:{width:1440,height:900}});
   await login(task,'task2.demo');await waitForHome(task,'My work');
   await task.locator('.home-task-table tbody tr').first().waitFor();
-  assert.deepEqual(await task.locator('.home-task-table thead th').allTextContents(),['Task','Sub-project','Status','Due','Action']);
+  assert.deepEqual(await task.locator('.home-task-table thead th').allTextContents(),['Task','Sub-project','Status','Due date','Timing','Action']);
   assert.match(await task.locator('.home-task-table tbody tr').first().innerText(),/Cylinder head thermal analysis/);
   await task.locator('.home-task-table tbody tr').first().getByRole('button',{name:'Fix and resubmit'}).waitFor();
   assert.equal(await task.locator('.user-home').count(),0);
