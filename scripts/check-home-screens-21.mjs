@@ -36,7 +36,7 @@ try{
   const task=await browser.newPage({viewport:{width:1440,height:900}});
   await login(task,'task2.demo');await waitForHome(task,'My work');
   await task.locator('.home-task-table tbody tr').first().waitFor();
-  assert.deepEqual(await task.locator('.home-task-table thead th').allTextContents(),['Task','Status','Due','Action']);
+  assert.deepEqual(await task.locator('.home-task-table thead th').allTextContents(),['Task','Sub-project','Status','Due','Action']);
   assert.match(await task.locator('.home-task-table tbody tr').first().innerText(),/Cylinder head thermal analysis/);
   await task.locator('.home-task-table tbody tr').first().getByRole('button',{name:'Fix and resubmit'}).waitFor();
   assert.equal(await task.locator('.user-home').count(),0);
@@ -45,7 +45,7 @@ try{
   await task.getByText('Signed out',{exact:true}).waitFor();
   await task.getByTestId('demo-scientist2-demo').click();await task.getByTestId('login-submit').click();await waitForHome(task,'My work');
   assert.equal(await task.getByText('Signed out',{exact:true}).count(),0);
-  await task.waitForFunction(()=>document.querySelector('.home-context-line')?.textContent?.includes('Design & Simulation'));
-  assert.match(await task.locator('.home-context-line').innerText(),/Engine Development Programme › Design & Simulation/);
+  await task.getByRole('columnheader',{name:'Sub-project'}).waitFor();
+  assert.equal((await task.locator('.home-context-line').innerText()).trim(),'Engine Development Programme');
   console.log('Issue #21 home screen checks passed.');
 }finally{await browser.close()}

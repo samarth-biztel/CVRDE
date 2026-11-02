@@ -30,7 +30,7 @@ The shared demo password is `CVRDE-Demo-2026!`. It fills automatically when you 
 | 7 | R. Sharma | Record a review meeting and assign an action item. |
 | 8 | A. Iyer | Find the action item in My work and its assignment notification. |
 
-Assignment, first submission, return, resubmission, sign-off, and meeting action each send one email when email is enabled. Comments and task start stay in-app only. The hosted six-message delivery check passed on 31 Oct 2026; see [email configuration](CONFIGURATION.md#email-delivery). A [sample drawing](../frontend/public/demo-files/piston-concept-drawing.png) and [backup recording](../demo/recordings/cvrde-walkthrough.webm) are available. All sample files are dummy content.
+Assignment, first submission, return, resubmission, sign-off, and meeting action each send one email when email is enabled. Comments and task start stay in-app only. The hosted six-message delivery check passed on 31 Oct 2026; see [email configuration](CONFIGURATION.md#email-delivery). A [sample drawing](../frontend/public/demo-files/piston-concept-drawing.png), [Prototype Build sample PDFs](../frontend/public/demo-assets), and [backup recording](../demo/recordings/cvrde-walkthrough.webm) are available. All sample files are dummy content.
 
 ## ♻️ Reset and automated checks
 

@@ -135,26 +135,47 @@ try{
     await query(tx,"UPDATE tasks SET created_at=now()-interval '16 days',updated_at=now()-interval '16 days' WHERE id=$1",[assembly]);
     await query(tx,"UPDATE task_history SET created_at=now()-interval '16 days' WHERE task_id=$1",[assembly]);
     await work(prototype,'Instrumentation for prototype','prototype.demo',20,'NOT_STARTED');
+    const blockInspection=await work(prototype,'Cylinder block machining inspection','scientist2.demo',3,'SUBMITTED');
+    const bearingFitment=await work(prototype,'Crankshaft and bearing fitment check','task2.demo',5,'RETURNED');
+    const fuelTest=await work(prototype,'Fuel injection system bench test','scientist2.demo',-3,'IN_PROGRESS','HIGH');
+    await query(tx,"UPDATE tasks SET created_at=now()-interval '4 days',updated_at=now()-interval '4 days' WHERE id=$1",[fuelTest]);
+    await query(tx,"UPDATE task_history SET created_at=now()-interval '4 days' WHERE task_id=$1",[fuelTest]);
+    const wiring=await work(prototype,'Wiring harness layout for prototype','task2.demo',8,'IN_PROGRESS');
+    await query(tx,"INSERT INTO task_comments(task_id,author_id,body,created_at) VALUES($1,$2,$3,now()-interval '2 days')",[wiring,ids['task2.demo'],'Sensor connector positions confirmed with Testing team']);
+    await history(tx,programmeId,wiring,'COMMENT_ADDED',ids['task2.demo'],{body:'Sensor connector positions confirmed with Testing team'});
+    await query(tx,"UPDATE tasks SET created_at=now()-interval '2 days',updated_at=now()-interval '2 days' WHERE id=$1",[wiring]);
+    await query(tx,"UPDATE task_history SET created_at=now()-interval '2 days' WHERE task_id=$1",[wiring]);
+    await work(prototype,'Exhaust manifold fitment','task2.demo',2,'NOT_STARTED');
+    await work(prototype,'Cooling circuit assembly','scientist2.demo',14,'NOT_STARTED');
+    const buildChecklist=await work(prototype,'Prototype build quality checklist','task2.demo',-4,'DONE');
     await work(testing,'Prepare dyno test plan','testing.demo',25,'NOT_STARTED');
     await work(testing,'Emissions test procedure','testing.demo',30,'NOT_STARTED');
     await work(testing,'Durability test plan','testing.demo',40,'NOT_STARTED');
     const baselineMilestone=await one<{id:number}>(tx,'INSERT INTO milestones(project_id,name,due_date,created_by) VALUES($1,$2,$3,$4) RETURNING id',[programmeId,'Design baseline ready',day(15),ids['pm.demo']]);
     await query(tx,'UPDATE tasks SET milestone_id=$1 WHERE id=ANY($2::bigint[])',[baselineMilestone!.id,[targets,piston,cfd,thermalHead]]);
     await history(tx,programmeId,null,'MILESTONE_CREATED',ids['pm.demo'],{milestone_id:baselineMilestone!.id,name:'Design baseline ready',due_date:day(15)});
-    async function evidence(taskId:number,owner:string,status:'PENDING'|'ACCEPTED'|'RETURNED',summary:string,fileName:string,comment?:string){
-      const result=await one<{id:number}>(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,review_comment,reviewed_by,reviewed_at) VALUES($1,1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[taskId,summary,'Fictional engineering evidence attached.',ids[owner],status,comment||null,status==='PENDING'?null:ids['scientist1.demo'],status==='PENDING'?null:new Date()]);
+    async function evidence(taskId:number,owner:string,status:'PENDING'|'ACCEPTED'|'RETURNED',summary:string,fileName:string,comment?:string,options?:{reviewer?:string;submittedAt?:Date;reviewedAt?:Date}){
+      const reviewer=options?.reviewer||'scientist1.demo';
+      const result=await one<{id:number}>(tx,'INSERT INTO task_results(task_id,version_no,work_completed,outcome,submitted_by,review_status,review_comment,reviewed_by,reviewed_at,submitted_at) VALUES($1,1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',[taskId,summary,'Fictional engineering evidence attached.',ids[owner],status,comment||null,status==='PENDING'?null:ids[reviewer],status==='PENDING'?null:options?.reviewedAt||new Date(),options?.submittedAt||new Date()]);
       const contents=pdf(`Fictional CVRDE demo evidence: ${summary}`);
       await query(tx,'INSERT INTO attachments(project_id,task_id,result_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10)',[programmeId,taskId,result!.id,`task:${taskId}:evidence`,fileName,randomUUID(),'application/pdf',contents.length,ids[owner],contents]);
       await history(tx,programmeId,taskId,'RESULT_SUBMITTED',ids[owner],{result_id:result!.id,version_no:1});
-      if(status!=='PENDING')await history(tx,programmeId,taskId,'RESULT_REVIEWED',ids['scientist1.demo'],{result_id:result!.id,review:status,comment:comment||''});
+      if(status!=='PENDING')await history(tx,programmeId,taskId,'RESULT_REVIEWED',ids[reviewer],{result_id:result!.id,review:status,comment:comment||''});
     }
     await evidence(targets,'scientist2.demo','ACCEPTED','Performance targets defined','performance-targets.pdf');
     await evidence(piston,'task2.demo','ACCEPTED','Piston design and FEA complete','piston-fea-report.pdf');
     await evidence(cfd,'scientist2.demo','PENDING','CFD simulation submitted for review','combustion-cfd-report.pdf');
     await evidence(thermalHead,'task2.demo','RETURNED','Thermal analysis requires revised inputs','cylinder-head-thermal-report.pdf',"Boundary conditions don't match revised targets");
     await evidence(inputAction,'scientist1.demo','ACCEPTED','Simulation inputs updated','updated-simulation-inputs.pdf');
+    await evidence(blockInspection,'scientist2.demo','PENDING','Bore and deck measurements within tolerance','block-inspection-report.pdf',undefined,{reviewer:'prototype.demo'});
+    await evidence(bearingFitment,'task2.demo','RETURNED','Crankshaft and bearing fitment checked','bearing-fitment-check.pdf','Bearing clearance values missing for cylinders 3 and 4',{reviewer:'prototype.demo'});
+    await evidence(buildChecklist,'task2.demo','ACCEPTED','Prototype build quality checklist completed','build-checklist.pdf',undefined,{reviewer:'prototype.demo',submittedAt:new Date(Date.now()-6*86400000),reviewedAt:new Date(Date.now()-5*86400000)});
+    await query(tx,"UPDATE tasks SET created_at=now()-interval '8 days',updated_at=now()-interval '5 days' WHERE id=$1",[buildChecklist]);
+    await query(tx,"UPDATE task_history SET created_at=CASE event_type WHEN 'TASK_CREATED' THEN now()-interval '8 days' WHEN 'RESULT_SUBMITTED' THEN now()-interval '6 days' ELSE now()-interval '5 days' END WHERE task_id=$1",[buildChecklist]);
     await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['SUBMITTED',ids['scientist1.demo'],cfd,'Result submitted: Combustion chamber CFD simulation','SKIPPED']);
     await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],thermalHead,'Result returned: Cylinder head thermal analysis','SKIPPED']);
+    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['SUBMITTED',ids['prototype.demo'],blockInspection,'Submitted: Cylinder block machining inspection','SKIPPED']);
+    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],bearingFitment,'Returned: Crankshaft and bearing fitment check','SKIPPED']);
     const brief=pdf('Fictional Engine Development Programme design brief. No real CVRDE or DRDO data.');
     await query(tx,'INSERT INTO attachments(project_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)',[programmeId,'project:design_brief','engine-design-brief.pdf',randomUUID(),'application/pdf',brief.length,ids['pm.demo'],brief]);
     // Remove the five named disposable projects; preserve TEAL_DEMO, BiztelAI_Work, and any new unrelated projects.

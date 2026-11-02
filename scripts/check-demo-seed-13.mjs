@@ -9,8 +9,8 @@ try{
   assert.deepEqual(Object.values(accounts).map(account=>account.user.full_name),['R. Sharma','A. Iyer','K. Menon','P. Rao','S. Nair','V. Kulkarni']);
   const projects=await (await pm.ctx.get('/api/v1/projects')).json(),project=projects.find(item=>item.name==='Engine Development Programme');assert.ok(project);
   const subs=await (await pm.ctx.get(`/api/v1/projects/${project.id}/sub-projects`)).json();assert.deepEqual(subs.map(item=>item.name),['Design & Simulation','Prototype Build','Testing & Validation']);
-  assert.deepEqual(subs.map(item=>[item.task_total,item.task_done]),[[9,3],[4,2],[3,0]]);
-  const tasks=await (await pm.ctx.get(`/api/v1/projects/${project.id}/tasks`)).json();assert.equal(tasks.length,16);
+  assert.deepEqual(subs.map(item=>[item.task_total,item.task_done]),[[9,3],[11,3],[3,0]]);
+  const tasks=await (await pm.ctx.get(`/api/v1/projects/${project.id}/tasks`)).json();assert.equal(tasks.length,23);
   const find=title=>{const item=tasks.find(task=>task.title===title);assert.ok(item,title);return item};
   assert.equal(find('Combustion chamber CFD simulation').status,'SUBMITTED');assert.equal(find('Cylinder head thermal analysis').status,'RETURNED');assert.equal(find('Crankshaft stress analysis').status,'IN_PROGRESS');
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-2);assert.equal(find('Crankshaft stress analysis').due_date.slice(0,10),yesterday.toISOString().slice(0,10));
@@ -22,5 +22,5 @@ try{
   const notifications=await (await accounts['task2.demo'].ctx.get('/api/v1/me/notifications')).json();assert.ok(notifications.some(item=>item.task_id===thermal.id&&item.event_type==='RETURNED'));
   const risk=await (await pm.ctx.get(`/api/v1/projects/${project.id}/risk`)).json();assert.equal(risk.sub_projects.length,3);
   const cooling=find('Cooling jacket design');const coolingRisk=risk.tasks.find(item=>item.id===cooling.id);assert.ok(coolingRisk);assert.ok(Date.now()-new Date(coolingRisk.last_activity_at).getTime()>5*86400000,'Cooling jacket design should be stale');
-  console.log('Demo seed #13 passed: six logins, three staged sub-projects, 16 tasks, evidence, review, meeting actions, and notifications.');
+  console.log('Demo seed passed: six logins, three staged sub-projects, 23 tasks, evidence, review, meeting actions, and notifications.');
 }finally{await Promise.all(contexts.map(ctx=>ctx.dispose()))}

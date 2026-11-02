@@ -4,7 +4,7 @@ import { resolve, sep, extname } from 'node:path';
 process.env.NODE_ENV='test'; // Import the Express app without opening its standalone API port.
 const {app}=await import('../backend/dist/server.js');
 const dist=resolve('frontend/dist');
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.pdf':'application/pdf','.ico':'image/x-icon'};
 app.use(async(req,res,next)=>{
   if(req.path.startsWith('/api/') || req.path==='/health')return next();
   const path=req.path==='/'?resolve(dist,'index.html'):resolve(dist,'.'+req.path);
