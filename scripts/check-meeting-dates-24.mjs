@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict';
+import {chromium,request} from 'playwright';
+
+const origin=process.env.CVRDE_UI_URL||'http://localhost:5173';
+const ctx=await request.newContext({baseURL:origin});
+const day=offset=>{const date=new Date();date.setDate(date.getDate()+offset);return date.toISOString().slice(0,10)};
+try{
+  const login=await ctx.post('/api/v1/auth/login',{data:{username:'pm.demo',password:'CVRDE-Demo-2026!'}});
+  assert.equal(login.status(),200);
+  const user=await login.json();
+  const projects=await (await ctx.get('/api/v1/projects')).json();
+  const project=projects.find(item=>item.name==='Engine Development Programme');
+  assert.ok(project);
+  const sub=(await (await ctx.get(`/api/v1/projects/${project.id}/sub-projects`)).json()).find(item=>item.name==='Design & Simulation');
+  assert.ok(sub);
+  const payload={title:'Meeting date verification',meeting_date:day(-1),sub_project_id:sub.id,minutes:'Record the review decisions.',attendee_ids:[user.id],actions:[]};
+  const future=await ctx.post(`/api/v1/projects/${project.id}/meetings`,{data:{...payload,meeting_date:day(2)}});
+  assert.equal(future.status(),400);
+  assert.match((await future.json()).error,/future/i);
+  const created=await ctx.post(`/api/v1/projects/${project.id}/meetings`,{data:payload});
+  assert.equal(created.status(),201);
+  const id=(await created.json()).id;
+  const get=async()=>await (await ctx.get(`/api/v1/meetings/${id}`)).json();
+  const first=await get();
+  assert.equal(first.meeting_date,day(-1));
+  assert.equal(first.created_by_name,user.full_name);
+  assert.equal(first.updated_by_name,null);
+  assert.ok(new Date(first.created_at).getTime()>Date.now()-60000);
+  assert.equal((await ctx.patch(`/api/v1/meetings/${id}`,{data:{created_at:'2000-01-01'}})).status(),400);
+  assert.equal((await ctx.patch(`/api/v1/meetings/${id}`,{data:{meeting_date:day(2)}})).status(),400);
+  const changed=await ctx.patch(`/api/v1/meetings/${id}`,{data:{minutes:'Record the final review decisions.'}});
+  assert.equal(changed.status(),200);
+  const second=await get();
+  assert.equal(second.created_at,first.created_at);
+  assert.equal(second.updated_by_name,user.full_name);
+  assert.ok(new Date(second.updated_at)>=new Date(first.created_at));
+  const action=await ctx.post(`/api/v1/meetings/${id}/actions`,{data:{actions:[{description:'Follow up meeting date',owner_id:user.id,due_date:day(3)}]}});
+  assert.equal(action.status(),201);
+  const task=await (await ctx.get(`/api/v1/tasks/${(await action.json()).task_ids[0]}`)).json();
+  assert.match(task.source_meeting_title,/Meeting date verification, /);
+  assert.match(task.source_meeting_title,/\d{1,2} \w{3} \d{4}$/);
+  const list=await (await ctx.get(`/api/v1/projects/${project.id}/meetings`)).json();
+  assert.ok(list.some(item=>item.id===id&&item.created_by_name===user.full_name));
+  const browser=await chromium.launch({headless:true});
+  try{
+    const page=await browser.newPage();
+    await page.goto(origin);
+    await page.getByTestId('login-username').fill('pm.demo');
+    await page.getByTestId('login-password').fill('CVRDE-Demo-2026!');
+    await page.getByTestId('login-submit').click();
+    await page.getByRole('combobox',{name:'Current project'}).selectOption(String(project.id));
+    await page.getByTestId('nav-meetings').click();
+    const row=page.locator('.meeting-list-row').filter({hasText:'Meeting date verification'}).first();
+    await row.getByText('Held', {exact:false}).waitFor();
+    await row.getByText('Minutes recorded', {exact:false}).waitFor();
+    await row.click();
+    await page.getByRole('heading',{name:/Meeting date verification.*Held/}).waitFor();
+    await page.getByText(/Last updated .* by/).waitFor();
+    await page.getByRole('button',{name:'Edit meeting'}).click();
+    assert.equal(await page.locator('input[name="meeting_date"]').getAttribute('max'),day(0));
+  }finally{await browser.close()}
+  console.log('Issue #24 passed: future dates rejected, recorded timestamp immutable, editor tracked, meeting source dated.');
+}finally{await ctx.dispose()}

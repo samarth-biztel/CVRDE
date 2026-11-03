@@ -122,7 +122,7 @@ try{
     await query(tx,"UPDATE tasks SET created_at=now()-interval '20 days',updated_at=now()-interval '20 days' WHERE id=$1",[cooling]);
     await query(tx,"UPDATE task_history SET created_at=now()-interval '20 days' WHERE task_id=$1",[cooling]);
     const meetingDate=day(-14),meetingTitle='Design review – Design & Simulation';
-    const meeting=await one<{id:number}>(tx,'INSERT INTO meetings(project_id,sub_project_id,title,meeting_date,minutes,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6,now()-interval \'14 days\') RETURNING id',[programmeId,design,meetingTitle,meetingDate,'Reviewed simulation targets and agreed to update inputs before the next CFD review. A. Iyer will share assumptions with Testing & Validation.',ids['pm.demo']]);
+    const meeting=await one<{id:number}>(tx,'INSERT INTO meetings(project_id,sub_project_id,title,meeting_date,minutes,created_by,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,now()-interval \'13 days\',now()-interval \'13 days\') RETURNING id',[programmeId,design,meetingTitle,meetingDate,'Reviewed simulation targets and agreed to update inputs before the next CFD review. A. Iyer will share assumptions with Testing & Validation.',ids['scientist1.demo']]);
     for(const name of ['pm.demo','scientist1.demo','scientist2.demo','task2.demo'])await query(tx,'INSERT INTO meeting_attendees(meeting_id,user_id) VALUES($1,$2)',[meeting!.id,ids[name]]);
     await history(tx,programmeId,null,'MEETING_CREATED',ids['pm.demo'],{meeting_id:meeting!.id,title:meetingTitle,action_count:2});
     const sourceDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(meetingDate+'T00:00:00Z'));
