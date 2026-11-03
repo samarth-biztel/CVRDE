@@ -8,8 +8,8 @@ import { db, one, query } from './db.js';
 import { currentUser, handler, history, HttpError, projectManager, projectMember, taskAccess, taskById, uid } from './core.js';
 
 export const fileRoutes=Router();
-const allowed=new Set(['.pdf','.docx','.xlsx','.pptx','.csv','.txt','.png','.jpg','.jpeg','.bmp']);
-const mime:Record<string,string>={'.pdf':'application/pdf','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','.csv':'text/csv','.txt':'text/plain','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.bmp':'image/bmp'};
+const allowed=new Set(['.pdf','.docx','.xlsx','.pptx','.csv','.txt','.png','.jpg','.jpeg','.bmp','.dxf','.mesh','.cdb']);
+const mime:Record<string,string>={'.pdf':'application/pdf','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','.csv':'text/csv','.txt':'text/plain','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.bmp':'image/bmp','.dxf':'image/vnd.dxf','.mesh':'application/octet-stream','.cdb':'application/octet-stream'};
 // The Vercel request body limit is 4.5 MB; leave room for multipart headers.
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:4*1024*1024},fileFilter:(_req,file,cb)=>cb(null,allowed.has(extname(file.originalname).toLowerCase()))});
 type Attachment={id:number;project_id:number;task_id:number|null;result_id:number|null;document_key:string;version_no:number;stored_name:string;original_name:string;mime_type:string;size_bytes:number};

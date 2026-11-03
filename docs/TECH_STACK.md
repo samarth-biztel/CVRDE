@@ -35,6 +35,8 @@ Vercel routes `/api/v1/*` and `/health` to [`api/index.ts`](../api/index.ts) thr
 
 The hierarchy is **Project → Sub-project → Task**. Tasks support `parent_task_id` for subtasks and `milestone_id` for milestones. Meeting action items are tasks with a meeting source. Results have review outcomes; attachments, comments, task history, audit events, and notification delivery records are stored in PostgreSQL. Project documents and task evidence are downloaded through authorized API endpoints.
 
+Project documents and task evidence accept PDF, Office, CSV, text, common images, and engineering files (`.dxf`, `.mesh`, `.cdb`) up to 4 MB each. Downloads preserve the original filename and require access to the related project or task.
+
 The API checks project membership and task access on protected routes. PM and sub-project-owner decisions are scoped to their project or sub-project. Session tokens are stored as hashes, with HTTP-only cookies; passwords are hashed. Inputs are validated with Zod. Email delivery status is `SENT`, `FAILED`, or `SKIPPED`; in-app notifications remain when email is off.
 
 ## 📁 Repository map
