@@ -1,4 +1,4 @@
-# CVRDE Work Management Demo
+# CVRDE Project Management Demo
 
 A fictional engine development programme showing how a PM structures work, assigns tasks, reviews evidence, signs off results, and follows up on meetings. **Use fictional data only:** the public demo accounts are not for real CVRDE or DRDO information.
 

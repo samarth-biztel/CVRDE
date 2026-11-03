@@ -155,9 +155,8 @@ main{padding:34px min(4vw,64px) 72px;min-width:0}
 .top{display:flex;align-items:flex-end;gap:20px;padding-bottom:26px;margin-bottom:28px;border-bottom:1px solid var(--border)}
 .top h1{font-size:clamp(2.2rem,3.5vw,3.6rem);line-height:1.02;letter-spacing:-.055em;font-weight:800;margin:8px 0 0}
 .top h1{font-size:clamp(1.45rem,2vw,2rem)}
-.sidebar-org{font-size:.7rem;line-height:1.35;color:var(--muted);padding:12px 4px 4px}
-.sidebar-project{padding:4px 0 18px}.sidebar-project select{width:100%;font-size:.78rem}
-.sidebar-collapsed .sidebar-org,.sidebar-collapsed .sidebar-project,.sidebar-collapsed .nav-count{display:none}
+.sidebar-project{padding:16px 0 18px}.sidebar-project select{width:100%;font-size:.78rem}
+.sidebar-collapsed .sidebar-project,.sidebar-collapsed .nav-count{display:none}
 .nav-count{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:.68rem;margin-left:auto}
 .notification-wrap{position:relative}.bell-button{display:flex;align-items:center;gap:4px}
 .notification-popover{position:absolute;z-index:50;right:0;top:calc(100% + 8px);width:min(420px,calc(100vw - 24px));overflow:hidden;padding:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 50px #102b3530}
@@ -403,7 +402,7 @@ button,.button,input,select,textarea{border-radius:8px}
 .sidebar-brand-row{border-color:#FFFFFF24}
 .brand-icon{background:var(--brand);border-radius:9px;color:#FFFFFF}
 .sidebar .brand-copy strong,.sidebar .user-copy strong{color:#FFFFFF}
-.sidebar .brand-copy small,.sidebar .sidebar-org,.sidebar .nav-caption,.sidebar .user-copy small{color:var(--sidebar-muted)}
+.sidebar .brand-copy small,.sidebar .nav-caption,.sidebar .user-copy small{color:var(--sidebar-muted)}
 .sidebar .collapse-button{color:var(--sidebar-muted);border-color:#FFFFFF2B}
 .sidebar .collapse-button:hover{background:#FFFFFF17;color:#FFFFFF}
 .sidebar nav button{color:var(--sidebar-muted);border-radius:8px;transition:background .16s ease,color .16s ease,transform .16s ease}

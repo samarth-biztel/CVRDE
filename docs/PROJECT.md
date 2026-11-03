@@ -4,7 +4,7 @@
 
 ## 🎯 Purpose
 
-CVRDE Work Management is a fictional, cloud-hosted demo of an engine development programme. It shows a complete work loop, from planning through evidence-based sign-off and meeting follow-up. The sample project is **Engine Development Programme**, a fictional 1.5 L petrol R&D programme. Seed dates are calculated relative to the day the seed runs.
+CVRDE Project Management is a fictional, cloud-hosted demo of an engine development programme. It shows a complete work loop, from planning through evidence-based sign-off and meeting follow-up. The sample project is **Engine Development Programme**, a fictional 1.5 L petrol R&D programme. Seed dates are calculated relative to the day the seed runs.
 
 | Level | Demo example | Responsibility |
 |---|---|---|
