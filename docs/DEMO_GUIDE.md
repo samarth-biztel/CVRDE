@@ -30,11 +30,11 @@ The shared demo password is `CVRDE-Demo-2026!`. It fills automatically when you 
 | 7 | R. Sharma | Record a review meeting and assign an action item. |
 | 8 | A. Iyer | Find the action item in My work and its assignment notification. |
 
-Assignment, first submission, return, resubmission, sign-off, and meeting action each send one email when email is enabled. Comments and task start stay in-app only. The hosted six-message delivery check passed on 31 Oct 2026; see [email configuration](CONFIGURATION.md#email-delivery). A [sample drawing](../frontend/public/demo-files/piston-concept-drawing.png), [Prototype Build sample PDFs](../frontend/public/demo-assets), and [backup recording](../demo/recordings/cvrde-walkthrough.webm) are available. All sample files are dummy content.
+Assignment, first submission, return, resubmission, sign-off, and meeting action each send one email when email is enabled. Comments and task start stay in-app only. The hosted six-message delivery check passed on 31 Oct 2026; see [email configuration](CONFIGURATION.md#email-delivery). A [sample drawing](../frontend/public/demo-files/piston-concept-drawing.png), [Prototype Build sample PDFs](../frontend/public/demo-assets), the [presentation](CVRDE_Demo_Presentation.pptx), and a [backup recording](../demo/recordings/cvrde-walkthrough.webm) are available. All sample files are dummy content.
 
 ## ♻️ Reset and automated checks
 
-Use a dedicated demo database. `npm run reset:demo` runs migrations and restores the two named fictional demo projects and their accounts. It **replaces those demo projects**, so run it only against the intended database. It does not delete unrelated projects. Reset after a walkthrough.
+Use a dedicated demo database. `npm run reset:demo` runs migrations and restores Engine Development Programme and its accounts. It removes the named disposable demo projects while preserving unrelated projects, including the user-retained `TEAL_DEMO` and `BiztelAI_Work`. Run it only against the intended database. Reset after a walkthrough.
 
 ```powershell
 npm run reset:demo
@@ -45,3 +45,5 @@ npm run reset:demo
 ```
 
 The hosted walkthrough creates tasks, submissions and a meeting; it changes data. The hosted app and local reset command must point to the **same demo database**. The seed check is read-only. See the [setup guide](SETUP.md) for local and hosted environments.
+
+To refresh the presentation after UI changes, run `node scripts/capture-demo-23.mjs` against the hosted demo, then `node scripts/create-deck.mjs`. The screenshots are saved under [`docs/screenshots`](screenshots). Set `CVRDE_RECORD_DEMO=1` when running the story check to replace the backup recording.
