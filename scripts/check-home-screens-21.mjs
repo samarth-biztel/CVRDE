@@ -12,9 +12,9 @@ try{
   await pm.getByRole('heading',{name:/Waiting for your review/}).waitFor();
   const sections=await pm.locator('.demo-project-home > *').evaluateAll(elements=>elements.map(element=>element.textContent||''));
   assert.match(sections[0],/Develop and validate a new 1\.5 L petrol engine/);
-  assert.match(sections[1],/Waiting for your review/);
-  assert.match(sections[2],/At risk/);assert.doesNotMatch(sections[2],/Open meeting actions/);
-  assert.match(sections[3],/Sub-projects/);assert.equal(sections.some(text=>text.includes('Milestones')),false);
+  assert.match(sections[1],/Sub-projects/);
+  assert.match(sections[2],/Waiting for your review/);
+  assert.match(sections[3],/At risk/);assert.doesNotMatch(sections[3],/Open meeting actions/);assert.equal(sections.some(text=>text.includes('Milestones')),false);
   for(const title of ['Crankshaft stress analysis','Friction loss estimation','Cooling jacket design','Assemble first prototype engine'])await pm.locator('.pm-demo-risk').getByText(title,{exact:true}).waitFor();
   assert.equal(await pm.locator('.demo-project-home button:disabled').count(),0);
   assert.equal((await pm.locator('.home-context-line').innerText()).trim(),'Engine Development Programme');

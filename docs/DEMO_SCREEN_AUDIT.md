@@ -6,7 +6,7 @@ Checked against the eight screen content criteria in issue #20 on 3 Nov 2026: pu
 | --- | --- |
 | My work | One owned-task table, ordered by action; returned reasons and completed dates are visible. No unrelated tasks or disabled actions. |
 | My sub-project | One task table puts review items first; the header shows its objective, due date, and progress. The owner sees only their sub-project. |
-| PM Overview | Project header, pending reviews, full-width at-risk table, then sub-projects. Meeting-action and milestone panels are hidden in the demo. |
+| PM Overview | Project header, sub-projects, pending reviews, then the full-width at-risk table. Meeting-action and milestone panels are hidden in the demo. |
 | Tasks | Search and filters precede the sortable table. Assigned, due date, timing, owner, reviewer, and status are separate columns. |
 | Review | Evidence and summary appear with each decision. Return requires a reason; Sign off is the primary action. |
 | Meetings | Lists sort by meeting date. Detail distinguishes “Held” from “Minutes recorded” and shows the editor after a change. Done action items show their completion date, and action items link to tasks. |

@@ -13,7 +13,7 @@ const C={ink:'111827',accent:'4338CA',gray:'52525B',line:'E4E4E7',white:'FFFFFF'
 const root=process.cwd(),screens=join(root,'docs','screenshots');
 const slides=[
   ['CVRDE Work Management','Pilot demo','01-login',['Six fictional accounts cover the PM, three sub-project owners, and two task owners.','Choose a person to fill the sign-in form.','The same hosted workspace serves the interface and API.']],
-  ['Programme overview','Project manager','02-overview',['Three sub-projects show different stages of work.','Review decisions and at-risk tasks appear before the project structure.','The PM can open any task or sub-project from here.']],
+  ['Programme overview','Project manager','02-overview',['Three sub-projects appear beneath the project header.','Review decisions and at-risk tasks follow the project structure.','The PM can open any task or sub-project from here.']],
   ['Project task register','Project manager','03-tasks',['Find work by sub-project, owner, status, priority, and due date.','Assigned, due date, timing, owner, and reviewer are visible together.','Open a task to inspect its evidence and history.']],
   ['My sub-project','Sub-project owner','04-subproject',['One table puts submitted work first for review.','Returned and overdue work follows in action order.','The owner can assign tasks and record meetings within this sub-project.']],
   ['My work','Task owner','05-my-work',['Only owned tasks appear in the primary work list.','Returned work carries the reviewer reason.','Each row offers its next relevant action.']],
