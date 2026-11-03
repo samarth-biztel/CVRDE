@@ -9,7 +9,7 @@ Checked against the eight screen content criteria in issue #20 on 3 Nov 2026: pu
 | PM Overview | Project header, pending reviews, full-width at-risk table, then sub-projects. Meeting-action and milestone panels are hidden in the demo. |
 | Tasks | Search and filters precede the sortable table. Assigned, due date, timing, owner, reviewer, and status are separate columns. |
 | Review | Evidence and summary appear with each decision. Return requires a reason; Sign off is the primary action. |
-| Meetings | Lists sort by meeting date. Detail distinguishes “Held” from “Minutes recorded” and shows the editor after a change. Action items link to tasks. |
+| Meetings | Lists sort by meeting date. Detail distinguishes “Held” from “Minutes recorded” and shows the editor after a change. Done action items show their completion date, and action items link to tasks. |
 | Settings | Members, Import, and At-risk rule are separate tabs. The member table uses “Sub-project owner” and “Task owner” in the demo. |
 | Task detail | Owner, reviewer, and PM states follow the issue #20 matrix. Evidence, submissions, discussion, and collapsed history appear in workflow order. |
 

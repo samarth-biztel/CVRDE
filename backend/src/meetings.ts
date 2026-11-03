@@ -66,7 +66,7 @@ meetingRoutes.get('/meetings/:meetingId',handler(async(req,res)=>{
   const canEdit=user.role==='PM'&&project.manager_id===user.id||!!meeting.sub_project_id&&!!await one(db,'SELECT 1 FROM sub_projects WHERE id=$1 AND owner_id=$2',[meeting.sub_project_id,user.id]);
   const [attendees,actions]=await Promise.all([
     query(db,'SELECT u.id,u.full_name FROM meeting_attendees ma JOIN users u ON u.id=ma.user_id WHERE ma.meeting_id=$1 ORDER BY u.full_name',[meeting.id]),
-    query(db,`SELECT t.id,t.title AS description,t.owner_id,u.full_name AS owner_name,t.due_date,t.status FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.source_meeting_id=$1 ORDER BY t.due_date,t.id`,[meeting.id])
+    query(db,`SELECT t.id,t.title AS description,t.owner_id,u.full_name AS owner_name,t.due_date,t.status,coalesce((SELECT r.reviewed_at FROM task_results r WHERE r.task_id=t.id AND r.review_status='ACCEPTED' ORDER BY r.version_no DESC LIMIT 1),t.updated_at) AS completed_at FROM tasks t JOIN users u ON u.id=t.owner_id WHERE t.source_meeting_id=$1 ORDER BY t.due_date,t.id`,[meeting.id])
   ]);const metadata=await one<{created_at:string;updated_at:string;created_by_name:string;updated_by_name:string|null;sub_project_name:string|null}>(db,'SELECT m.created_at,m.updated_at,creator.full_name AS created_by_name,editor.full_name AS updated_by_name,sp.name AS sub_project_name FROM meetings m JOIN users creator ON creator.id=m.created_by LEFT JOIN users editor ON editor.id=m.updated_by LEFT JOIN sub_projects sp ON sp.id=m.sub_project_id WHERE m.id=$1',[meeting.id]);res.json({...meeting,...metadata,attendees,actions,can_edit:canEdit});
 }));
 meetingRoutes.patch('/meetings/:meetingId',handler(async(req,res)=>{
