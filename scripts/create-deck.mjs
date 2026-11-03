@@ -27,7 +27,8 @@ function addSlide([title,eyebrow,image,points],number){
   slide.addText(eyebrow.toUpperCase(),{x:.45,y:.3,w:10,h:.2,fontSize:8,bold:true,charSpacing:1.8,color:C.accent,margin:0});
   slide.addText(title,{x:.45,y:.58,w:12.1,h:.5,fontFace:'Aptos Display',fontSize:28,bold:true,color:C.ink,margin:0});
   slide.addShape(pptx.ShapeType.rect,{x:.4,y:1.32,w:8.55,h:5.5,line:{color:C.line,width:1},fill:{color:C.white}});
-  slide.addImage({path:join(screens,`demo-${image}.png`),x:.44,y:1.36,w:8.47,h:5.42});
+  const ratio=image==='03-tasks'?1600/900:1440/900,width=Math.min(8.47,5.42*ratio),height=width/ratio;
+  slide.addImage({path:join(screens,`demo-${image}.png`),x:.44+(8.47-width)/2,y:1.36+(5.42-height)/2,w:width,h:height});
   slide.addShape(pptx.ShapeType.rect,{x:9.23,y:1.32,w:3.68,h:5.5,line:{color:C.line,width:1},fill:{color:C.white}});
   slide.addText('IN THIS VIEW',{x:9.5,y:1.69,w:3.1,h:.23,fontSize:9,bold:true,charSpacing:1.6,color:C.accent,margin:0});
   points.forEach((point,index)=>{const y=2.2+index*1.35;slide.addShape(pptx.ShapeType.rect,{x:9.51,y:y+.06,w:.08,h:.08,line:{color:C.accent},fill:{color:C.accent}});slide.addText(point,{x:9.75,y,w:2.85,h:.93,fontSize:12.5,color:C.ink,margin:0,fit:'shrink'})});
