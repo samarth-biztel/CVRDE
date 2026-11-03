@@ -10,7 +10,7 @@ try{
   const projects=await (await pm.ctx.get('/api/v1/projects')).json(),project=projects.find(item=>item.name==='Engine Development Programme');assert.ok(project);
   const subs=await (await pm.ctx.get(`/api/v1/projects/${project.id}/sub-projects`)).json();assert.deepEqual(subs.map(item=>item.name),['Design & Simulation','Prototype Build','Testing & Validation']);
   assert.deepEqual(subs.map(item=>[item.task_total,item.task_done]),[[9,3],[11,3],[3,0]]);
-  const tasks=await (await pm.ctx.get(`/api/v1/projects/${project.id}/tasks`)).json();assert.equal(tasks.length,23);
+  const tasks=await (await pm.ctx.get(`/api/v1/projects/${project.id}/tasks`)).json();assert.equal(tasks.length,23);assert.ok(tasks.every(task=>task.created_at&&task.reviewer_name));
   const find=title=>{const item=tasks.find(task=>task.title===title);assert.ok(item,title);return item};
   assert.equal(find('Combustion chamber CFD simulation').status,'SUBMITTED');assert.equal(find('Cylinder head thermal analysis').status,'RETURNED');assert.equal(find('Crankshaft stress analysis').status,'IN_PROGRESS');
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-2);assert.equal(find('Crankshaft stress analysis').due_date.slice(0,10),yesterday.toISOString().slice(0,10));

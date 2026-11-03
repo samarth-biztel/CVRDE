@@ -8,7 +8,7 @@ try{
   const pm=await login('pm.demo','overview');
   assert.equal(await pm.getByTestId('nav-projects').count(),0);assert.equal(await pm.locator('.sidebar-project').count(),1);assert.equal(await pm.getByTestId('nav-reports').count(),0);
   await pm.locator('.demo-project-home').waitFor();await pm.locator('.demo-subproject-grid button').first().waitFor();assert.equal(await pm.locator('.demo-subproject-grid button').count(),3);
-  for(const text of ['At risk','Open meeting actions','Milestones','Sub-projects'])assert.ok((await pm.locator('.demo-project-home').innerText()).includes(text));
+  for(const text of ['At risk','Open meeting actions','Sub-projects'])assert.ok((await pm.locator('.demo-project-home').innerText()).includes(text));assert.doesNotMatch(await pm.locator('.demo-project-home').innerText(),/Milestones/);
   await pm.locator('.demo-home-grid').getByRole('button',{name:/Share CFD assumptions/}).click();await pm.locator('.meeting-source').waitFor();await pm.locator('.meeting-source').click();await pm.getByRole('heading',{name:'Minutes'}).waitFor();
   const sub=await login('scientist1.demo','subproject');
   assert.equal(await sub.getByTestId('nav-projects').count(),0);await sub.locator('.role-home').waitFor();await sub.getByRole('heading',{name:'Design & Simulation'}).waitFor();assert.doesNotMatch(await sub.locator('.role-home').innerText(),/Prototype Build|Testing & Validation/);await sub.getByRole('button',{name:'New task'}).waitFor();

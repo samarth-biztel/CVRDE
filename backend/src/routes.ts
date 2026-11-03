@@ -207,7 +207,7 @@ api.get('/projects/:projectId/tasks',handler(async(req,res)=>{
       FROM tasks t JOIN users owner ON owner.id=t.owner_id JOIN sub_projects sp ON sp.id=t.sub_project_id
       WHERE t.sub_project_id=$1 AND t.owner_id<>$2 ORDER BY t.due_date NULLS LAST,t.id`,[sourceTask.sub_project_id,u.id]));
   }
-  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id WHERE t.project_id=$1 AND ($3='PM' OR p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR ($3='REVIEWER' AND t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id,u.role]));
+  send(res,await query(db,`SELECT t.*,u.full_name AS owner_name,sp.name AS sub_project_name,reviewer.full_name AS reviewer_name,(SELECT count(*)::int FROM attachments a WHERE a.task_id=t.id AND a.result_id IS NULL) AS available_file_count FROM tasks t JOIN users u ON u.id=t.owner_id JOIN projects p ON p.id=t.project_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id LEFT JOIN users reviewer ON reviewer.id=coalesce(sp.owner_id,p.manager_id) WHERE t.project_id=$1 AND ($3='PM' OR p.manager_id=$2 OR t.owner_id=$2 OR sp.owner_id=$2 OR ($3='REVIEWER' AND t.visibility='GROUP' AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=t.group_id AND gm.user_id=$2))) ORDER BY t.due_date NULLS LAST,t.id`,[pid,u.id,u.role]));
 }));
 api.get('/tasks/mine',handler(async(_req,res)=>{
   const u=currentUser(res);role(u,['MEMBER']);

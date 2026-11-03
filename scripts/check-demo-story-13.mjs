@@ -40,7 +40,7 @@ try{
   const report=await readFile(resolve('frontend/public/demo-files/combustion-cfd-report.pdf'));
   const firstFile=await checked(await owner.ctx.post(`/api/v1/tasks/${task.id}/attachments`,{multipart:{document_key:'valve-train-report',file:{name:'combustion-cfd-report.pdf',mimeType:'application/pdf',buffer:report}}}),201,'Upload report');
   const first=await checked(await api(owner.ctx,`/tasks/${task.id}/results`,'post',{work_completed:'Completed initial valve train simulation',outcome:'Initial results ready for review',attachment_ids:[firstFile.id]}),201,'Submit result');
-  await show('scientist2.demo','3. Task owner submits a simulation report','tasks');
+  await show('scientist2.demo','3. Task owner submits a simulation report','mine');
   assert.ok((await checked(await api(sub.ctx,'/me/pending-actions'),200,'Review queue')).some(x=>x.task_id===task.id));
   await show('scientist1.demo','4. Sub-project owner reviews and returns the result','pending');
   await checked(await api(sub.ctx,`/results/${first.id}/review`,'post',{accept:false,comment:'Please correct the valve timing assumptions and resubmit.'}),200,'Return result');
@@ -51,7 +51,7 @@ try{
   const revision=await readFile(resolve('frontend/public/demo-files/revised-cfd-report.pdf'));
   const revisedFile=await checked(await owner.ctx.post(`/api/v1/tasks/${task.id}/attachments`,{multipart:{document_key:'valve-train-revision',file:{name:'revised-cfd-report.pdf',mimeType:'application/pdf',buffer:revision}}}),201,'Upload revision');
   const second=await checked(await api(owner.ctx,`/tasks/${task.id}/results`,'post',{work_completed:'Corrected valve timing assumptions and reran simulation',outcome:'Revised report ready for sign-off',attachment_ids:[revisedFile.id]}),201,'Resubmit');
-  await show('scientist2.demo','6. Corrected report is resubmitted','tasks');
+  await show('scientist2.demo','6. Corrected report is resubmitted','mine');
   await checked(await api(sub.ctx,`/results/${second.id}/review`,'post',{accept:true,comment:'Simulation evidence accepted.'}),200,'Accept result');
   const updated=await checked(await api(pm.ctx,`/sub-projects/${design.id}`),200,'Progress');
   assert.equal(updated.task_done,initial+1);
@@ -59,7 +59,7 @@ try{
   const meeting=await checked(await api(pm.ctx,`/projects/${project.id}/meetings`,'post',{title:'Valve train review',meeting_date:today,sub_project_id:design.id,minutes:'Reviewed the accepted valve train simulation. Share the revised timing assumptions with Prototype Build.',attendee_ids:[pm.user.id,sub.user.id,owner.user.id],actions:[{description:'Share revised valve timing assumptions with Prototype Build',owner_id:sub.user.id,due_date:due}]}),201,'Record meeting');
   const detail=await checked(await api(pm.ctx,`/meetings/${meeting.id}`),200,'Meeting detail');
   assert.equal(detail.actions.length,1);
-  await show('pm.demo','7. PM records a review meeting and action item','projects');
+  await show('pm.demo','7. PM records a review meeting and action item','meetings');
   const actionId=detail.actions[0].id;
   const subWork=await checked(await api(sub.ctx,`/me/work?project_id=${project.id}`),200,'Sub-project owner My work');
   assert.ok(subWork.tasks.some(task=>task.id===actionId&&task.source_meeting_title?.includes('Valve train review')));
