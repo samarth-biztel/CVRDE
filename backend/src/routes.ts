@@ -315,8 +315,36 @@ api.post('/tasks/:taskId/comments',handler(async(req,res)=>{
   send(res,row,201);
 }));
 api.get('/tasks/:taskId/comments',handler(async(req,res)=>{const u=currentUser(res),task=await taskById(id(req.params.taskId));if(await taskAccess(u,task,'VIEW')==='LIMITED')throw new HttpError(403,'Forbidden');send(res,await query(db,'SELECT c.*,u.full_name AS author_name FROM task_comments c JOIN users u ON u.id=c.author_id WHERE c.task_id=$1 ORDER BY c.created_at,c.id',[task.id]));}));
-api.get('/me/notifications',handler(async(_req,res)=>{
-  const u=currentUser(res);send(res,await query(db,"SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.sent_at,n.read_at FROM notification_log n JOIN tasks t ON t.id=n.task_id JOIN projects p ON p.id=t.project_id WHERE n.to_user_id=$1 AND (($2='PM' AND p.manager_id=$1) OR ($2<>'PM' AND p.name='Engine Development Programme')) ORDER BY n.sent_at DESC,n.id DESC LIMIT 100",[u.id,u.role]));
+api.get('/me/notifications/counts',handler(async(_req,res)=>{
+  const u=currentUser(res);send(res,await one(db,'SELECT count(*)::int AS total,count(*) FILTER (WHERE read_at IS NULL)::int AS unread FROM notification_log WHERE to_user_id=$1',[u.id]));
+}));
+api.get('/me/notifications',handler(async(req,res)=>{
+  const u=currentUser(res);
+  const limit=Math.min(51,Math.max(1,Number(req.query.limit)||50));
+  const offset=Math.max(0,Number(req.query.offset)||0);
+  if(!Number.isSafeInteger(limit)||!Number.isSafeInteger(offset))throw new HttpError(400,'Invalid pagination');
+  const unread=req.query.unread==='1';
+  const category=typeof req.query.type==='string'?req.query.type:'';
+  if(category&&!['Assigned','Submitted','Returned','Signed off','Commented','Action item'].includes(category))throw new HttpError(400,'Invalid event type');
+  send(res,await query(db,`SELECT n.id,n.event_type,n.task_id,t.project_id,n.subject,n.body,n.sent_at,n.read_at,actor.full_name AS actor_name,sp.name AS sub_project_name,
+    CASE WHEN t.source_meeting_id IS NOT NULL AND n.subject LIKE 'Meeting action assigned:%' THEN t.source_meeting_id ELSE NULL END AS meeting_id,
+    CASE WHEN t.source_meeting_id IS NOT NULL AND n.subject LIKE 'Meeting action assigned:%' THEN m.title ELSE NULL END AS meeting_title,
+    COALESCE(t.title,split_part(n.subject,': ',2),n.subject) AS task_title,
+    CASE WHEN n.subject LIKE 'Meeting action assigned:%' THEN 'Action item'
+      WHEN n.event_type IN ('ASSIGNED','OWNER_CHANGED') THEN 'Assigned'
+      WHEN n.event_type='SUBMITTED' THEN 'Submitted'
+      WHEN n.event_type='RETURNED' THEN 'Returned'
+      WHEN n.event_type='ACCEPTED' THEN 'Signed off'
+      WHEN n.event_type='COMMENT' THEN 'Commented'
+      ELSE 'Other' END AS category
+    FROM notification_log n LEFT JOIN tasks t ON t.id=n.task_id LEFT JOIN sub_projects sp ON sp.id=t.sub_project_id
+    LEFT JOIN meetings m ON m.id=t.source_meeting_id LEFT JOIN users actor ON actor.id=n.actor_id
+    WHERE n.to_user_id=$1 AND ($2::boolean=false OR n.read_at IS NULL)
+    AND ($3::text='' OR CASE WHEN n.subject LIKE 'Meeting action assigned:%' THEN 'Action item'
+      WHEN n.event_type IN ('ASSIGNED','OWNER_CHANGED') THEN 'Assigned' WHEN n.event_type='SUBMITTED' THEN 'Submitted'
+      WHEN n.event_type='RETURNED' THEN 'Returned' WHEN n.event_type='ACCEPTED' THEN 'Signed off'
+      WHEN n.event_type='COMMENT' THEN 'Commented' ELSE 'Other' END=$3)
+    ORDER BY n.sent_at DESC,n.id DESC LIMIT $4 OFFSET $5`,[u.id,unread,category,limit,offset]));
 }));
 api.post('/me/notifications/read-all',handler(async(_req,res)=>{
   const u=currentUser(res);await db.transaction().execute(async tx=>{const rows=await query(tx,'UPDATE notification_log SET read_at=now() WHERE to_user_id=$1 AND read_at IS NULL RETURNING id',[u.id]);if(rows.length)await query(tx,'INSERT INTO audit_log(action,actor_id,details) VALUES($1,$2,$3::jsonb)',['NOTIFICATIONS_READ',u.id,JSON.stringify({count:rows.length})]);});send(res,{ok:true});

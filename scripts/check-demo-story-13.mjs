@@ -64,7 +64,7 @@ try{
   const subWork=await checked(await api(sub.ctx,`/me/work?project_id=${project.id}`),200,'Sub-project owner My work');
   assert.ok(subWork.tasks.some(task=>task.id===actionId&&task.source_meeting_title?.includes('Valve train review')));
   assert.ok((await checked(await api(sub.ctx,'/me/notifications'),200,'Meeting action notification')).some(item=>item.task_id===actionId&&item.event_type==='ASSIGNED'));
-  await show('scientist1.demo','8. Action item appears in A. Iyer’s My work with a notification','mine');
+  await show('scientist1.demo','8. Action item appears in A. Iyer’s My sub-project with a notification','subproject');
   console.log(`Hosted demo story passed at ${origin}: task ${task.id}, return, notification, resubmission, sign-off, progress, and meeting ${meeting.id}.`);
 }finally{
   if(browserContext){await browserContext.close();await video.saveAs(resolve('demo/recordings/cvrde-walkthrough.webm'));const raw=await video.path();if(raw.startsWith(resolve('demo/recordings')+sep))await unlink(raw);await browser.close();console.log('Backup recording saved: demo/recordings/cvrde-walkthrough.webm');}

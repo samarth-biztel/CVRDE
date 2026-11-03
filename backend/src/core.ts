@@ -114,7 +114,7 @@ export async function notify(eventType:string, toUserId:number, taskId:number|nu
   try {
     const recipient = await one<{email:string;task_title:string|null;project_name:string|null;meeting_title:string|null;actor_name:string|null}>(db,`SELECT u.email,t.title AS task_title,p.name AS project_name,t.source_meeting_title AS meeting_title,actor.full_name AS actor_name FROM users u LEFT JOIN tasks t ON t.id=$2 LEFT JOIN projects p ON p.id=t.project_id LEFT JOIN users actor ON actor.id=$3 WHERE u.id=$1 AND u.active`,[toUserId,taskId||null,actorId||null]);
     if (!recipient) return;
-    const entry=await one<{id:number}>(db,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5) RETURNING id',[eventType,toUserId,taskId,subject,'SKIPPED']);
+    const entry=await one<{id:number}>(db,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,body,actor_id,delivery_status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',[eventType,toUserId,taskId,subject,body,actorId||null,'SKIPPED']);
     if(process.env.EMAIL_ENABLED!=='true'||!emailEnabled(eventType)||actorId===toUserId||!recipient.task_title||!recipient.project_name)return;
     try{
       await sendNotificationEmail({eventType,projectName:recipient.project_name,taskTitle:recipient.task_title,taskId:taskId!,recipientEmail:recipient.email,actorName:recipient.actor_name||'A team member',detail:body,meetingTitle:recipient.meeting_title});

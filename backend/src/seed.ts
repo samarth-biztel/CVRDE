@@ -172,10 +172,12 @@ try{
     await evidence(buildChecklist,'task2.demo','ACCEPTED','Prototype build quality checklist completed','build-checklist.pdf',undefined,{reviewer:'prototype.demo',submittedAt:new Date(Date.now()-6*86400000),reviewedAt:new Date(Date.now()-5*86400000)});
     await query(tx,"UPDATE tasks SET created_at=now()-interval '8 days',updated_at=now()-interval '5 days' WHERE id=$1",[buildChecklist]);
     await query(tx,"UPDATE task_history SET created_at=CASE event_type WHEN 'TASK_CREATED' THEN now()-interval '8 days' WHEN 'RESULT_SUBMITTED' THEN now()-interval '6 days' ELSE now()-interval '5 days' END WHERE task_id=$1",[buildChecklist]);
-    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['SUBMITTED',ids['scientist1.demo'],cfd,'Result submitted: Combustion chamber CFD simulation','SKIPPED']);
-    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],thermalHead,'Result returned: Cylinder head thermal analysis','SKIPPED']);
-    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['SUBMITTED',ids['prototype.demo'],blockInspection,'Submitted: Cylinder block machining inspection','SKIPPED']);
-    await query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,delivery_status) VALUES($1,$2,$3,$4,$5)', ['RETURNED',ids['task2.demo'],bearingFitment,'Returned: Crankshaft and bearing fitment check','SKIPPED']);
+    const seedNotification=async(event:string,to:string,taskId:number,subject:string,body:string,actor:string)=>query(tx,'INSERT INTO notification_log(event_type,to_user_id,task_id,subject,body,actor_id,delivery_status) VALUES($1,$2,$3,$4,$5,$6,$7)',[event,ids[to],taskId,subject,body,ids[actor],'SKIPPED']);
+    await seedNotification('SUBMITTED','scientist1.demo',cfd,'Submitted: Combustion chamber CFD simulation','CFD simulation submitted for review','scientist2.demo');
+    await seedNotification('RETURNED','task2.demo',thermalHead,'Returned: Cylinder head thermal analysis',"Boundary conditions don't match revised targets",'scientist1.demo');
+    await seedNotification('SUBMITTED','prototype.demo',blockInspection,'Submitted: Cylinder block machining inspection','Bore and deck measurements within tolerance','scientist2.demo');
+    await seedNotification('RETURNED','task2.demo',bearingFitment,'Returned: Crankshaft and bearing fitment check','Bearing clearance values missing for cylinders 3 and 4','prototype.demo');
+    await seedNotification('ASSIGNED','scientist1.demo',inputAction,'Meeting action assigned: Update simulation inputs with revised targets',`From: ${meetingSource}`,'pm.demo');
     const brief=pdf('Fictional Engine Development Programme design brief. No real CVRDE or DRDO data.');
     await query(tx,'INSERT INTO attachments(project_id,document_key,version_no,original_name,stored_name,mime_type,size_bytes,uploaded_by,content) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)',[programmeId,'project:design_brief','engine-design-brief.pdf',randomUUID(),'application/pdf',brief.length,ids['pm.demo'],brief]);
     // Remove the five named disposable projects; preserve TEAL_DEMO, BiztelAI_Work, and any new unrelated projects.
