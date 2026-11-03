@@ -29,7 +29,7 @@ try{
       const expected=Number((await button.locator('strong').innerText()).match(/^\d+/)?.[0]||0);
       await button.click();
       await page.getByRole('heading',{name:new RegExp(`Showing ${filter} tasks`)}).waitFor();
-      await page.waitForLoadState('networkidle');
+      if(expected)await page.waitForFunction(count=>document.querySelectorAll('.workspace-table tbody tr').length===count,expected,{timeout:10000});
       const actual=await page.locator('.workspace-table tbody tr').count();
       if(actual!==expected)throw new Error(`${mode} ${tile}: tile ${expected}, table ${actual}`);
       console.log(`${mode} ${tile}: ${actual} matching tasks`);
